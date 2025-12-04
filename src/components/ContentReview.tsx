@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Card, CardContent } from './ui/card';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from './ui/dialog';
 import { Textarea } from './ui/textarea';
 import { FileText, Image, Clock, Eye, Check, X, Edit } from 'lucide-react';
+import { api } from '@/lib/api';
 
 type ContentStatus = 'pending' | 'approved' | 'rejected';
 
@@ -13,64 +14,83 @@ interface Content {
   title: string;
   preview: string;
   status: ContentStatus;
-  wordCount: number;
-  imageCount: number;
   createdAt: string;
-  keyword: string;
 }
 
-const mockContents: Content[] = [
-  {
-    id: 1,
-    title: '2024년 최신 갤럭시 S24 완벽 리뷰',
-    preview: '삼성전자의 최신 플래그십 스마트폰 갤럭시 S24가 드디어 출시되었습니다. 이번 모델은 AI 기능이 대폭 강화되었으며, 카메라 성능도...',
-    status: 'pending',
-    wordCount: 1245,
-    imageCount: 5,
-    createdAt: '2024-11-22 10:30',
-    keyword: '갤럭시 S24',
-  },
-  {
-    id: 2,
-    title: '블랙프라이데이 쇼핑 꿀팁 대공개',
-    preview: '연말 최대 쇼핑 시즌인 블랙프라이데이가 다가왔습니다. 올해는 어떤 제품을 구매하는 것이 좋을까요? 전자제품부터 생활용품까지...',
-    status: 'pending',
-    wordCount: 1089,
-    imageCount: 4,
-    createdAt: '2024-11-22 09:15',
-    keyword: '블랙프라이데이',
-  },
-  {
-    id: 3,
-    title: '겨울 필수템! 패딩 추천 가이드',
-    preview: '본격적인 겨울이 다가오면서 패딩을 찾는 분들이 많아지고 있습니다. 올해 트렌드부터 가성비 제품까지 모두 소개해드립니다...',
-    status: 'approved',
-    wordCount: 1432,
-    imageCount: 6,
-    createdAt: '2024-11-21 14:20',
-    keyword: '패딩 추천',
-  },
-  {
-    id: 4,
-    title: '다이슨 청소기 vs 삼성 청소기 비교',
-    preview: '무선 청소기 시장의 양대 산맥인 다이슨과 삼성 제품을 비교해봤습니다. 각 브랜드의 장단점과 추천 모델을...',
-    status: 'rejected',
-    wordCount: 956,
-    imageCount: 3,
-    createdAt: '2024-11-21 11:45',
-    keyword: '다이슨 청소기',
-  },
-];
+// Backend types
+type ApiContent = {
+  id: number;
+  jobId: string;
+  userId: number;
+  uploadChannelId: number;
+  title: string;
+  body: string;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED' | string;
+  generationType: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+function mapStatus(s: ApiContent['status']): ContentStatus {
+  switch (s) {
+    case 'APPROVED':
+      return 'approved';
+    case 'REJECTED':
+      return 'rejected';
+    case 'PENDING':
+    default:
+      return 'pending';
+  }
+}
+
+function toContent(a: ApiContent): Content {
+  return {
+    id: a.id,
+    title: a.title,
+    preview: a.body || '',
+    status: mapStatus(a.status),
+    createdAt: a.createdAt,
+  };
+}
 
 export function ContentReview() {
   const [selectedStatus, setSelectedStatus] = useState<ContentStatus | 'all'>('pending');
   const [selectedContent, setSelectedContent] = useState<Content | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editedText, setEditedText] = useState('');
+  const [contents, setContents] = useState<Content[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [actioningId, setActioningId] = useState<number | null>(null);
 
-  const filteredContents = selectedStatus === 'all' 
-    ? mockContents 
-    : mockContents.filter(content => content.status === selectedStatus);
+  // Load list
+  useEffect(() => {
+    let ignore = false;
+    setLoading(true);
+    setError(null);
+    api
+      .get<ApiContent[]>('/content')
+      .then((list) => {
+        if (ignore) return;
+        setContents(list.map(toContent));
+      })
+      .catch((e: any) => {
+        if (ignore) return;
+        setError(e?.message || '콘텐츠 목록을 불러오지 못했습니다');
+      })
+      .finally(() => {
+        if (ignore) return;
+        setLoading(false);
+      });
+    return () => {
+      ignore = true;
+    };
+  }, []);
+
+  const filteredContents = useMemo(() => {
+    if (selectedStatus === 'all') return contents;
+    return contents.filter((c) => c.status === selectedStatus);
+  }, [contents, selectedStatus]);
 
   const getStatusBadge = (status: ContentStatus) => {
     switch (status) {
@@ -83,25 +103,51 @@ export function ContentReview() {
     }
   };
 
-  const handlePreview = (content: Content) => {
-    setSelectedContent(content);
+  const handlePreview = async (content: Content) => {
+    try {
+      const full = await api.get<ApiContent>(`/content/${content.id}`);
+      const mapped = toContent(full);
+      setSelectedContent(mapped);
+    } catch (e) {
+      setSelectedContent(content);
+    }
   };
 
-  const handleEdit = (content: Content) => {
-    setEditedText(content.preview);
-    setSelectedContent(content);
-    setEditDialogOpen(true);
+  const handleEdit = async (content: Content) => {
+    try {
+      const full = await api.get<ApiContent>(`/content/${content.id}`);
+      const mapped = toContent(full);
+      setEditedText(mapped.preview);
+      setSelectedContent(mapped);
+    } catch {
+      setEditedText(content.preview);
+      setSelectedContent(content);
+    } finally {
+      setEditDialogOpen(true);
+    }
   };
 
   const handleApprove = (content: Content) => {
-    alert(`"${content.title}" 콘텐츠가 승인되었습니다.`);
-    setSelectedContent(null);
+    updateStatus(content.id, 'APPROVED');
   };
 
   const handleReject = (content: Content) => {
-    alert(`"${content.title}" 콘텐츠가 반려되었습니다.`);
-    setSelectedContent(null);
+    updateStatus(content.id, 'REJECTED');
   };
+
+  async function updateStatus(id: number, status: 'PENDING' | 'APPROVED' | 'REJECTED') {
+    try {
+      setActioningId(id);
+      const updated = await api.patch<ApiContent>(`/content/status/${id}`, { status });
+      const mapped = toContent(updated);
+      setContents((prev) => prev.map((c) => (c.id === mapped.id ? mapped : c)));
+      if (selectedContent && selectedContent.id === id) setSelectedContent(mapped);
+    } catch (e) {
+      alert('상태 변경에 실패했습니다.');
+    } finally {
+      setActioningId(null);
+    }
+  }
 
   return (
     <div className="p-8">
@@ -156,7 +202,13 @@ export function ContentReview() {
 
       {/* Content Cards */}
       <div className="grid grid-cols-1 gap-4">
-        {filteredContents.map((content) => (
+        {loading && (
+          <div className="text-gray-500">불러오는 중...</div>
+        )}
+        {error && (
+          <div className="text-red-600">{error}</div>
+        )}
+        {!loading && !error && filteredContents.map((content) => (
           <Card key={content.id}>
             <CardContent className="p-6">
               <div className="flex items-start justify-between mb-4">
@@ -168,18 +220,9 @@ export function ContentReview() {
                   <p className="text-gray-600 mb-3">{content.preview}</p>
                   <div className="flex items-center gap-4 text-gray-500">
                     <div className="flex items-center gap-1">
-                      <FileText className="w-4 h-4" />
-                      <span>{content.wordCount.toLocaleString()}자</span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Image className="w-4 h-4" />
-                      <span>{content.imageCount}개</span>
-                    </div>
-                    <div className="flex items-center gap-1">
                       <Clock className="w-4 h-4" />
                       <span>{content.createdAt}</span>
                     </div>
-                    <Badge variant="secondary">{content.keyword}</Badge>
                   </div>
                 </div>
               </div>
@@ -224,7 +267,8 @@ export function ContentReview() {
         ))}
       </div>
 
-      {/* Preview Dialog */}
+      {/* Preview Dialog */
+      }
       <Dialog open={selectedContent !== null && !editDialogOpen} onOpenChange={(open) => !open && setSelectedContent(null)}>
         <DialogContent className="max-w-3xl">
           <DialogHeader>
@@ -233,7 +277,6 @@ export function ContentReview() {
           <div className="space-y-4">
             <div className="prose max-w-none">
               <p>{selectedContent?.preview}</p>
-              <p>이 부분은 실제 콘텐츠의 전체 내용이 표시됩니다. AI가 생성한 마케팅 글의 전체 내용을 여기서 확인하고 품질을 검수할 수 있습니다.</p>
             </div>
           </div>
           <DialogFooter>
@@ -258,9 +301,20 @@ export function ContentReview() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditDialogOpen(false)}>취소</Button>
-            <Button onClick={() => {
-              alert('콘텐츠가 수정되었습니다.');
-              setEditDialogOpen(false);
+            <Button onClick={async () => {
+              if (!selectedContent) return;
+              try {
+                const updated = await api.put<ApiContent>(`/content/${selectedContent.id}`, {
+                  title: selectedContent.title,
+                  body: editedText,
+                });
+                const mapped = toContent(updated);
+                setContents((prev) => prev.map((c) => (c.id === mapped.id ? mapped : c)));
+                setSelectedContent(mapped);
+                setEditDialogOpen(false);
+              } catch (e) {
+                alert('콘텐츠 수정에 실패했습니다.');
+              }
             }}>저장</Button>
           </DialogFooter>
         </DialogContent>

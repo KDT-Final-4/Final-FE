@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/card';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -7,11 +7,23 @@ import { Textarea } from './ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Switch } from './ui/switch';
 import { Eye, EyeOff, Save } from 'lucide-react';
+import { api } from '@/lib/api';
 
 export function LLMSettings() {
   const [showApiKey, setShowApiKey] = useState(false);
-  const [apiKey, setApiKey] = useState('sk-proj-xxxxxxxxxxxxxxxxxxxx');
-  const [model, setModel] = useState('gpt-4');
+  const [apiKey, setApiKey] = useState('');
+  const [model, setModel] = useState('');
+  const [name, setName] = useState('');
+  const [baseUrl, setBaseUrl] = useState('');
+  const [status, setStatus] = useState<boolean>(true);
+  const [maxTokens, setMaxTokens] = useState<number>(0);
+  const [temperature, setTemperature] = useState<number>(0);
+  const [topP, setTopP] = useState<number>(0);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
+  // legacy fields kept for UI coherence
   const [targetLength, setTargetLength] = useState('1200');
   const [autoImage, setAutoImage] = useState(true);
   const [systemPrompt, setSystemPrompt] = useState(
@@ -32,8 +44,73 @@ export function LLMSettings() {
 위 정보를 바탕으로 매력적인 마케팅 블로그 글을 작성해주세요.`
   );
 
-  const handleSave = () => {
-    alert('LLM 설정이 저장되었습니다.');
+  type LlmSetting = {
+    id: number;
+    userId: number;
+    name: string;
+    modelName: string;
+    baseUrl: string;
+    status: boolean;
+    maxTokens: number;
+    temperature: number;
+    topP: number;
+    apiKey: string;
+    createdAt: string;
+    updatedAt: string;
+  };
+
+  useEffect(() => {
+    let ignore = false;
+    setLoading(true);
+    setError(null);
+    api
+      .get<LlmSetting>('/setting/llm')
+      .then((res) => {
+        if (ignore) return;
+        setName(res.name || '');
+        setModel(res.modelName || '');
+        setBaseUrl(res.baseUrl || '');
+        setStatus(!!res.status);
+        setMaxTokens(res.maxTokens ?? 0);
+        setTemperature(res.temperature ?? 0);
+        setTopP(res.topP ?? 0);
+        // apiKey는 보안상 빈 문자열일 수 있음
+        setApiKey(res.apiKey || '');
+      })
+      .catch((e: any) => {
+        if (ignore) return;
+        setError(e?.message || 'LLM 설정을 불러오지 못했습니다');
+      })
+      .finally(() => {
+        if (ignore) return;
+        setLoading(false);
+      });
+    return () => {
+      ignore = true;
+    };
+  }, []);
+
+  const handleSave = async () => {
+    try {
+      setSaving(true);
+      setMsg(null);
+      setError(null);
+      await api.post<LlmSetting>('/setting/llm', {
+        name,
+        modelName: model,
+        apiKey,
+        baseUrl,
+        status,
+        maxTokens,
+        temperature,
+        topP,
+      });
+      setMsg('설정이 저장되었습니다.');
+    } catch (e: any) {
+      setError(e?.message || '설정 저장에 실패했습니다');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -44,6 +121,9 @@ export function LLMSettings() {
       </div>
 
       <div className="space-y-6 max-w-4xl">
+        {loading && <div className="text-gray-500">불러오는 중...</div>}
+        {error && <div className="text-red-600">{error}</div>}
+        {msg && <div className="text-green-600">{msg}</div>}
         {/* API Key */}
         <Card>
           <CardHeader>
@@ -108,23 +188,64 @@ export function LLMSettings() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="target-length">목표 글자 수</Label>
+              <Label htmlFor="name">설정 이름</Label>
               <Input
-                id="target-length"
-                type="number"
-                value={targetLength}
-                onChange={(e) => setTargetLength(e.target.value)}
-                placeholder="1200"
+                id="name"
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="예: 기본 LLM 설정"
               />
-              <p className="text-gray-500">AI가 작성할 콘텐츠의 목표 글자 수입니다 (공백 포함)</p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="baseUrl">Base URL</Label>
+              <Input
+                id="baseUrl"
+                type="text"
+                value={baseUrl}
+                onChange={(e) => setBaseUrl(e.target.value)}
+                placeholder="https://api.openai.com/v1"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="maxTokens">Max Tokens</Label>
+              <Input
+                id="maxTokens"
+                type="number"
+                value={maxTokens}
+                onChange={(e) => setMaxTokens(Number(e.target.value))}
+                placeholder="0"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="temperature">Temperature</Label>
+              <Input
+                id="temperature"
+                type="number"
+                step="0.1"
+                value={temperature}
+                onChange={(e) => setTemperature(Number(e.target.value))}
+                placeholder="0.0"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="topP">Top P</Label>
+              <Input
+                id="topP"
+                type="number"
+                step="0.1"
+                value={topP}
+                onChange={(e) => setTopP(Number(e.target.value))}
+                placeholder="0.0"
+              />
             </div>
 
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">
-                <Label>이미지 자동 삽입</Label>
-                <p className="text-gray-500">Unsplash에서 관련 이미지를 자동으로 검색하여 삽입</p>
+                <Label>활성화</Label>
+                <p className="text-gray-500">LLM 설정을 사용 가능 상태로 유지합니다</p>
               </div>
-              <Switch checked={autoImage} onCheckedChange={setAutoImage} />
+              <Switch checked={status} onCheckedChange={setStatus} />
             </div>
           </CardContent>
         </Card>
@@ -160,7 +281,7 @@ export function LLMSettings() {
 
         {/* Save Button */}
         <div className="flex justify-end">
-          <Button onClick={handleSave} className="bg-blue-600 hover:bg-blue-700">
+          <Button onClick={handleSave} disabled={saving} className="bg-blue-600 hover:bg-blue-700">
             <Save className="w-4 h-4 mr-2" />
             설정 저장
           </Button>

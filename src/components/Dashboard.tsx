@@ -144,6 +144,9 @@ export function Dashboard() {
                     src={`https://source.unsplash.com/96x96/?${content.thumbnail}`}
                     alt={content.title}
                     className="w-full h-full object-cover"
+                    onError={(e) => {
+                      (e.currentTarget as HTMLImageElement).src = 'https://placehold.co/96x96';
+                    }}
                   />
                 </div>
                 <div className="flex-1 min-w-0">

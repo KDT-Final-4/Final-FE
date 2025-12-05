@@ -1,4 +1,4 @@
-import { getToken } from './auth';
+import { getToken, clearToken } from './auth';
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string) || '/api';
 
@@ -49,6 +49,39 @@ async function request<T = unknown>(path: string, init?: RequestInit): Promise<T
     if (body && typeof body === 'object') {
       err.code = body.type;
       err.body = body;
+    }
+    if (res.status === 401) {
+      // Temporarily disabled auto-redirect to diagnose 401 causes
+      // try {
+      //   clearToken();
+      //   if (typeof window !== 'undefined') {
+      //     window.dispatchEvent(new Event('app:unauthorized'));
+      //   }
+      // } catch {}
+      try {
+        const hdrs: Record<string, string> = {};
+        res.headers.forEach((v, k) => (hdrs[k] = v));
+        // eslint-disable-next-line no-console
+        console.log('[api] 401 Unauthorized', {
+          path,
+          status: res.status,
+          message,
+          body,
+          headers: hdrs,
+        });
+        if (typeof window !== 'undefined') {
+          const detail = {
+            path,
+            status: res.status,
+            message,
+            code: (body && (body.type || body.code)) || undefined,
+            hasWwwAuth: !!res.headers.get('www-authenticate'),
+            hasToken: !!getToken(),
+            headers: hdrs,
+          } as any;
+          window.dispatchEvent(new CustomEvent('app:unauthorized', { detail }));
+        }
+      } catch {}
     }
     throw err;
   }

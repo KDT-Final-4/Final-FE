@@ -1,11 +1,11 @@
 import { useState } from 'react';
-import { ShieldCheck, Sparkles, Clock3 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from './ui/card';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { api } from '@/lib/api';
 import { setToken, setLoggedInFlag, type LoginResponse } from '@/lib/auth';
+import auraLogo from '../../img/AURA-LOGO.png';
 
 interface LoginProps {
   onSuccess?: () => void;
@@ -39,9 +39,14 @@ export default function Login({ onSuccess, onSwitchToSignup }: LoginProps) {
       <div className="w-full max-w-2xl grid grid-cols-1 gap-8 items-stretch">
         <div className="flex items-center justify-center">
           <div className="w-full max-w-md space-y-6">
-            <div className="text-center space-y-2">
-              <p className="text-3xl font-semibold text-blue-600">AURA</p>
-              <p className="text-gray-500 text-sm"> Automated Update & Review Assistant</p>
+            <div className="text-center space-y-3">
+              <div className="flex items-center justify-center gap-3">
+                <img src={auraLogo} alt="AURA" className="h-10 w-auto" />
+                <div className="text-left">
+                  <p className="text-xl font-semibold text-gray-900 leading-none">AURA</p>
+                  <p className="text-gray-500 text-xs">Automated Update & Review Assistant</p>
+                </div>
+              </div>
             </div>
             <Card className="shadow-lg border border-gray-100">
               <CardHeader>

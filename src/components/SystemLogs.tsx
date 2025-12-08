@@ -3,9 +3,9 @@ import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Input } from './ui/input';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
-import { Search, Download, RefreshCw, AlertCircle, Info } from 'lucide-react';
+import { Search, Download, RefreshCw, AlertCircle, AlertTriangle, Info } from 'lucide-react';
 
-type LogLevel = 'INFO' | 'ERROR';
+type LogLevel = 'INFO' | 'WARN' | 'ERROR';
 
 interface LogEntry {
   id: number;
@@ -19,13 +19,25 @@ interface LogEntry {
 const PAGE_SIZE = 20;
 
 const getLevelIcon = (level: LogLevel) => {
-  return level === 'INFO' ? <Info className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />;
+  switch (level) {
+    case 'INFO':
+      return <Info className="w-4 h-4" />;
+    case 'WARN':
+      return <AlertTriangle className="w-4 h-4" />;
+    case 'ERROR':
+      return <AlertCircle className="w-4 h-4" />;
+  }
 };
 
 const getLevelColor = (level: LogLevel) => {
-  return level === 'INFO'
-    ? 'bg-blue-100 text-blue-700 border-blue-200'
-    : 'bg-red-100 text-red-700 border-red-200';
+  switch (level) {
+    case 'INFO':
+      return 'bg-blue-100 text-blue-700 border-blue-200';
+    case 'WARN':
+      return 'bg-yellow-100 text-yellow-700 border-yellow-200';
+    case 'ERROR':
+      return 'bg-red-100 text-red-700 border-red-200';
+  }
 };
 
 export function SystemLogs() {
@@ -36,7 +48,11 @@ export function SystemLogs() {
   const [selectedLevel, setSelectedLevel] = useState<LogLevel | 'ALL'>('ALL');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [counts, setCounts] = useState<{ info: number; error: number }>({ info: 0, error: 0 });
+  const [counts, setCounts] = useState<{ info: number; warn: number; error: number }>({
+    info: 0,
+    warn: 0,
+    error: 0,
+  });
 
   const fetchCounts = async () => {
     try {
@@ -46,14 +62,18 @@ export function SystemLogs() {
       });
       if (!res.ok) throw new Error('로그 카운트 조회 실패');
       const data = await res.json();
-      setCounts({ info: data.info ?? 0, error: data.error ?? 0 });
+      setCounts({
+        info: data.info ?? 0,
+        warn: data.warn ?? data.warning ?? 0,
+        error: data.error ?? 0,
+      });
     } catch (err) {
       console.error(err);
     }
   };
 
   const fetchLogs = async ({ reset = false }: { reset?: boolean } = {}) => {
-    if (loading) return; // 로딩 중에는 중복 호출 방지
+    if (loading) return;
 
     const nextPage = reset ? 0 : page;
     setLoading(true);
@@ -126,7 +146,7 @@ export function SystemLogs() {
       <div className="mb-8">
         <h1 className="text-gray-900 mb-2">로그 뷰어</h1>
         <p className="text-gray-600">
-          내 로그를 조회하고 검색하세요 (INFO {counts.info} · ERROR {counts.error})
+          내 로그를 조회하고 검색하세요 (INFO {counts.info} · WARN {counts.warn} · ERROR {counts.error})
         </p>
       </div>
 
@@ -158,7 +178,7 @@ export function SystemLogs() {
               />
             </div>
             <div className="flex gap-2">
-              {['ALL', 'INFO', 'ERROR'].map((level) => (
+              {['ALL', 'INFO', 'WARN', 'ERROR'].map((level) => (
                 <button
                   key={level}
                   onClick={() => setSelectedLevel(level as LogLevel | 'ALL')}

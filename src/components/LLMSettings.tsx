@@ -14,15 +14,14 @@ export function LLMSettings() {
   const [apiKey, setApiKey] = useState('');
   const [model, setModel] = useState('');
   const [name, setName] = useState('');
-  const [baseUrl, setBaseUrl] = useState('');
   const [status, setStatus] = useState<boolean>(true);
   const [maxTokens, setMaxTokens] = useState<number>(0);
   const [temperature, setTemperature] = useState<number>(0);
-  const [topP, setTopP] = useState<number>(0);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
+  const [llmId, setLlmId] = useState<number | null>(null);
   // legacy fields kept for UI coherence
   const [targetLength, setTargetLength] = useState('1200');
   const [autoImage, setAutoImage] = useState(true);
@@ -49,11 +48,10 @@ export function LLMSettings() {
     userId: number;
     name: string;
     modelName: string;
-    baseUrl: string;
     status: boolean;
     maxTokens: number;
     temperature: number;
-    topP: number;
+    prompt: string;
     apiKey: string;
     createdAt: string;
     updatedAt: string;
@@ -67,13 +65,13 @@ export function LLMSettings() {
       .get<LlmSetting>('/setting/llm')
       .then((res) => {
         if (ignore) return;
+        setLlmId(typeof res.id === 'number' ? res.id : null);
         setName(res.name || '');
         setModel(res.modelName || '');
-        setBaseUrl(res.baseUrl || '');
         setStatus(!!res.status);
         setMaxTokens(res.maxTokens ?? 0);
         setTemperature(res.temperature ?? 0);
-        setTopP(res.topP ?? 0);
+        if (res.prompt) setSystemPrompt(res.prompt);
         // apiKey는 보안상 빈 문자열일 수 있음
         setApiKey(res.apiKey || '');
       })
@@ -92,22 +90,31 @@ export function LLMSettings() {
 
   const handleSave = async () => {
     try {
+      const ok = window.confirm('설정을 저장하시겠습니까?');
+      if (!ok) return;
       setSaving(true);
       setMsg(null);
       setError(null);
-      await api.post<LlmSetting>('/setting/llm', {
+      const payload = {
         name,
         modelName: model,
         apiKey,
-        baseUrl,
         status,
         maxTokens,
         temperature,
-        topP,
-      });
+        prompt: systemPrompt,
+      };
+      const saved = llmId
+        ? await api.put<LlmSetting>('/setting/llm', payload)
+        : await api.post<LlmSetting>('/setting/llm', payload);
+      // reflect saved state
+      setLlmId(typeof saved.id === 'number' ? saved.id : llmId);
       setMsg('설정이 저장되었습니다.');
+      alert('설정이 저장되었습니다.');
     } catch (e: any) {
-      setError(e?.message || '설정 저장에 실패했습니다');
+      const message = e?.message || '설정 저장에 실패했습니다';
+      setError(message);
+      alert(message);
     } finally {
       setSaving(false);
     }
@@ -197,16 +204,7 @@ export function LLMSettings() {
                 placeholder="예: 기본 LLM 설정"
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="baseUrl">Base URL</Label>
-              <Input
-                id="baseUrl"
-                type="text"
-                value={baseUrl}
-                onChange={(e) => setBaseUrl(e.target.value)}
-                placeholder="https://api.openai.com/v1"
-              />
-            </div>
+            {/* Base URL removed per backend spec */}
             <div className="space-y-2">
               <Label htmlFor="maxTokens">Max Tokens</Label>
               <Input
@@ -228,17 +226,7 @@ export function LLMSettings() {
                 placeholder="0.0"
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="topP">Top P</Label>
-              <Input
-                id="topP"
-                type="number"
-                step="0.1"
-                value={topP}
-                onChange={(e) => setTopP(Number(e.target.value))}
-                placeholder="0.0"
-              />
-            </div>
+            {/* Top P removed per backend spec */}
 
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">

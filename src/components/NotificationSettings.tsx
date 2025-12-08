@@ -1,10 +1,12 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/card';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Switch } from './ui/switch';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Save, Bell, AlertCircle, CheckCircle, Clock, MessageSquare, Mail } from 'lucide-react';
+import { api } from '@/lib/api';
 
 interface NotificationSetting {
   id: string;
@@ -14,33 +16,23 @@ interface NotificationSetting {
   enabled: boolean;
 }
 
-interface NotificationChannel {
-  id: string;
-  name: string;
-  icon: any;
-  description: string;
-  enabled: boolean;
+interface NotificationSettingResponse {
+  id: number;
+  userId: number;
+  channelId: number;
+  webhookUrl: string | null;
+  apiToken: string | null;
+  isActive: boolean;
+  createdAt: string;
 }
 
 export function NotificationSettings() {
   const [slackWebhook, setSlackWebhook] = useState('');
-  const [channels, setChannels] = useState<NotificationChannel[]>([
-    {
-      id: 'email',
-      name: 'Email',
-      icon: Mail,
-      description: '시스템 이메일로 알림을 받습니다',
-      enabled: true,
-    },
-    {
-      id: 'slack',
-      name: 'Slack',
-      icon: MessageSquare,
-      description: 'Slack 채널로 실시간 알림을 받습니다',
-      enabled: false,
-    },
-  ]);
-  
+  const [selectedChannel, setSelectedChannel] = useState<number>(1);
+  const [isActive, setIsActive] = useState<boolean>(true);
+  const [initialLoading, setInitialLoading] = useState<boolean>(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+
   const [notifications, setNotifications] = useState<NotificationSetting[]>([
     {
       id: 'error',
@@ -72,16 +64,32 @@ export function NotificationSettings() {
     },
   ]);
 
-  const handleToggle = (id: string) => {
-    setNotifications(notifications.map(notif => 
-      notif.id === id ? { ...notif, enabled: !notif.enabled } : notif
-    ));
-  };
+  useEffect(() => {
+    let ignore = false;
+    (async () => {
+      try {
+        const data = await api.get<NotificationSettingResponse>('/setting/notification');
+        if (ignore) return;
+        setSelectedChannel(typeof data.channelId === 'number' ? data.channelId : 1);
+        setSlackWebhook(data.webhookUrl ?? '');
+        setIsActive(Boolean(data.isActive));
+      } catch (err: any) {
+        if (!ignore) {
+          setFetchError(err?.message || '알림 설정을 불러오지 못했습니다');
+        }
+      } finally {
+        if (!ignore) setInitialLoading(false);
+      }
+    })();
+    return () => {
+      ignore = true;
+    };
+  }, []);
 
-  const handleChannelToggle = (id: string) => {
-    setChannels(channels.map(channel => 
-      channel.id === id ? { ...channel, enabled: !channel.enabled } : channel
-    ));
+  const handleToggle = (id: string) => {
+    setNotifications((prev) =>
+      prev.map((notif) => (notif.id === id ? { ...notif, enabled: !notif.enabled } : notif)),
+    );
   };
 
   const handleSave = () => {
@@ -96,13 +104,17 @@ export function NotificationSettings() {
     alert('Slack 채널로 테스트 메시지를 발송했습니다.');
   };
 
-  const isSlackEnabled = channels.find(c => c.id === 'slack')?.enabled || false;
+  const isSlackEnabled = selectedChannel === 2;
 
   return (
     <div className="p-8">
-      <div className="mb-8">
-        <h1 className="text-gray-900 mb-2">알림 설정</h1>
-        <p className="text-gray-600">시스템 이벤트에 대한 알림을 설정하세요</p>
+      <div className="mb-8 flex items-center justify-between gap-4">
+        <div>
+          <h1 className="text-gray-900 mb-2">알림 설정</h1>
+          <p className="text-gray-600">시스템 이벤트에 대한 알림을 설정하세요</p>
+          {fetchError && <p className="text-sm text-red-600 mt-2">{fetchError}</p>}
+          {initialLoading && !fetchError && <p className="text-sm text-gray-500 mt-2">설정을 불러오는 중...</p>}
+        </div>
       </div>
 
       <div className="space-y-6 max-w-4xl">
@@ -111,60 +123,57 @@ export function NotificationSettings() {
           <CardHeader>
             <CardTitle>알림 채널</CardTitle>
             <CardDescription>알림을 받을 채널을 선택하세요</CardDescription>
+            <div className="flex justify-end mt-4">
+              <div className="flex items-center gap-3">
+                <span className="text-gray-700">알림 활성화</span>
+                <Switch checked={isActive} onCheckedChange={setIsActive} disabled={initialLoading} />
+              </div>
+            </div> 
           </CardHeader>
           <CardContent className="space-y-4">
-            {channels.map((channel) => {
-              const Icon = channel.icon;
-              return (
-                <div key={channel.id}>
-                  <div className="flex items-start justify-between p-4 border border-gray-200 rounded-lg hover:border-blue-300 transition-colors">
-                    <div className="flex items-start gap-3 flex-1">
-                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                        channel.enabled ? 'bg-blue-50' : 'bg-gray-50'
-                      }`}>
-                        <Icon className={`w-5 h-5 ${
-                          channel.enabled ? 'text-blue-600' : 'text-gray-400'
-                        }`} />
-                      </div>
-                      <div className="flex-1">
-                        <h4 className="text-gray-900 mb-1">{channel.name}</h4>
-                        <p className="text-gray-600">{channel.description}</p>
-                      </div>
-                    </div>
-                    <Switch
-                      checked={channel.enabled}
-                      onCheckedChange={() => handleChannelToggle(channel.id)}
-                    />
-                  </div>
-                  
-                  {/* Slack Webhook Input */}
-                  {channel.id === 'slack' && channel.enabled && (
-                    <div className="mt-3 ml-4 space-y-2">
-                      <Label htmlFor="slack-webhook">Slack Webhook URL</Label>
-                      <div className="flex gap-2">
-                        <Input
-                          id="slack-webhook"
-                          type="text"
-                          value={slackWebhook}
-                          onChange={(e) => setSlackWebhook(e.target.value)}
-                          placeholder="https://hooks.slack.com/services/YOUR/WEBHOOK/URL"
-                          className="flex-1"
-                        />
-                        <Button variant="outline" onClick={handleTestSlack}>
-                          테스트 발송
-                        </Button>
-                      </div>
-                      <p className="text-gray-500">Slack Incoming Webhook URL을 입력하세요</p>
-                    </div>
-                  )}
+            <div className="space-y-2">
+              <Label htmlFor="notification-channel">알림 채널</Label>
+              <Select
+                value={String(selectedChannel)}
+                onValueChange={(v: string) => setSelectedChannel(parseInt(v, 10))}
+                disabled={initialLoading}
+              >
+                <SelectTrigger id="notification-channel">
+                  <SelectValue placeholder="채널을 선택하세요" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="1">Email</SelectItem>
+                  <SelectItem value="2">Slack</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Slack Webhook Input */}
+            {isSlackEnabled && (
+              <div className="mt-1 space-y-2">
+                <Label htmlFor="slack-webhook">Slack Webhook URL</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="slack-webhook"
+                    type="text"
+                    value={slackWebhook}
+                    onChange={(e) => setSlackWebhook(e.target.value)}
+                    placeholder="https://hooks.slack.com/services/YOUR/WEBHOOK/URL"
+                    className="flex-1"
+                    disabled={initialLoading}
+                  />
+                  <Button variant="outline" onClick={handleTestSlack} disabled={initialLoading}>
+                    테스트 발송
+                  </Button>
                 </div>
-              );
-            })}
+                <p className="text-gray-500">Slack Incoming Webhook URL을 입력하세요</p>
+              </div>
+            )}
           </CardContent>
         </Card>
 
         {/* Notification Types */}
-        <Card>
+        {/* <Card>
           <CardHeader>
             <CardTitle>알림 유형</CardTitle>
             <CardDescription>받고 싶은 알림 유형을 선택하세요</CardDescription>
@@ -178,30 +187,29 @@ export function NotificationSettings() {
                   className="flex items-start justify-between p-4 border border-gray-200 rounded-lg hover:border-blue-300 transition-colors"
                 >
                   <div className="flex items-start gap-3 flex-1">
-                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                      notif.enabled ? 'bg-blue-50' : 'bg-gray-50'
-                    }`}>
-                      <Icon className={`w-5 h-5 ${
-                        notif.enabled ? 'text-blue-600' : 'text-gray-400'
-                      }`} />
+                    <div
+                      className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                        notif.enabled ? 'bg-blue-50' : 'bg-gray-50'
+                      }`}
+                    >
+                      <Icon
+                        className={`w-5 h-5 ${notif.enabled ? 'text-blue-600' : 'text-gray-400'}`}
+                      />
                     </div>
                     <div className="flex-1">
                       <h4 className="text-gray-900 mb-1">{notif.title}</h4>
                       <p className="text-gray-600">{notif.description}</p>
                     </div>
                   </div>
-                  <Switch
-                    checked={notif.enabled}
-                    onCheckedChange={() => handleToggle(notif.id)}
-                  />
+                  <Switch checked={notif.enabled} onCheckedChange={() => handleToggle(notif.id)} />
                 </div>
               );
             })}
           </CardContent>
-        </Card>
+        </Card> */}
 
         {/* Notification Schedule */}
-        <Card>
+        {/* <Card>
           <CardHeader>
             <CardTitle>알림 스케줄</CardTitle>
             <CardDescription>일일 리포트 발송 시간을 설정하세요</CardDescription>
@@ -210,12 +218,7 @@ export function NotificationSettings() {
             <div className="space-y-2">
               <Label htmlFor="report-time">리포트 발송 시간</Label>
               <div className="flex items-center gap-4">
-                <Input
-                  id="report-time"
-                  type="time"
-                  defaultValue="09:00"
-                  className="w-40"
-                />
+                <Input id="report-time" type="time" defaultValue="09:00" className="w-40" />
                 <span className="text-gray-500">매일 지정된 시간에 자동 발송됩니다</span>
               </div>
             </div>
@@ -231,10 +234,10 @@ export function NotificationSettings() {
               </ul>
             </div>
           </CardContent>
-        </Card>
+        </Card> */}
 
         {/* Advanced Settings */}
-        <Card>
+        {/* <Card>
           <CardHeader>
             <CardTitle>고급 설정</CardTitle>
             <CardDescription>알림 발송 방식에 대한 세부 설정</CardDescription>
@@ -256,15 +259,16 @@ export function NotificationSettings() {
               <Switch />
             </div>
           </CardContent>
-        </Card>
+        </Card> */}
 
         {/* Save Button */}
         <div className="flex justify-end">
-          <Button onClick={handleSave} className="bg-blue-600 hover:bg-blue-700">
+          <Button onClick={handleSave} className="bg-blue-600 hover:bg-blue-700" disabled={initialLoading}>
             <Save className="w-4 h-4 mr-2" />
             설정 저장
           </Button>
         </div>
+        
       </div>
     </div>
   );

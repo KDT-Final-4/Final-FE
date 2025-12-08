@@ -10,6 +10,7 @@ import {
   Clock,
 } from "lucide-react";
 import { cn } from "../lib/utils";
+import auraLogo from "../../img/AURA-LOGO.png";
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 
@@ -99,10 +100,13 @@ export function Sidebar({
   return (
     <div className="w-64 bg-white border-r border-gray-200 flex flex-col">
       <div className="p-6 border-b border-gray-200">
-        <h1 className="text-gray-900">AURA</h1>
-        <p className="text-gray-500 mt-1">
-          Automated Update & Review Assistant
-        </p>
+        <div className="flex items-center gap-3">
+          <div>
+            <img src={auraLogo} alt="AURA" className="h-12 w-auto object-contain" />
+            {/* <h1 className="text-gray-900">AURA</h1>
+            <p className="text-gray-500">Automated Update & Review Assistant</p> */}
+          </div>
+        </div>
       </div>
 
       <nav className="flex-1 p-4 space-y-6">

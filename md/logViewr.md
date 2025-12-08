@@ -9,7 +9,7 @@
   Authorization 헤더는 안 읽음). 브라우저 요청 시 `credentials: 'include'`
   필요.
 - 헤더: `Accept: application/json`
-- 타입: `logType`는 문자열 `"INFO"` 또는 `"ERROR"` 만 존재.
+- 타입: `logType`는 문자열 `"INFO"`, `"WARN"`, `"ERROR"` 세 가지.
 
 ## GET /api/log
 - 목적: 내 로그 리스트 조회 (검색 + 페이지네이션)
@@ -23,7 +23,7 @@
 - 로그 객체 필드
     - `id`: number
     - `userId`: number
-    - `logType`: `"INFO"` | `"ERROR"`
+    - `logType`: `"INFO"` | `"WARN"` | `"ERROR"`
     - `jobId`: string
     - `message`: string (줄바꿈/탭 포함 가능)
     - `createdAt`: string (ISO-8601 local datetime, 예: `2024-07-
@@ -47,22 +47,31 @@
     {
       "id": 16,
       "userId": 5,
+      "logType": "WARN",
+      "jobId": "deploy-2024-07-12-001",
+      "message": "DEPLOY | 2024-07-12T09:14:02 | slow response",
+      "createdAt": "2024-07-12T09:14:02.003210"
+    },
+    {
+      "id": 15,
+      "userId": 5,
       "logType": "ERROR",
       "jobId": "deploy-2024-07-12-001",
-      "message": "DEPLOY | 2024-07-12T09:14:02 | failed",
-      "createdAt": "2024-07-12T09:14:02.003210"
+      "message": "DEPLOY | 2024-07-12T09:13:00 | failed",
+      "createdAt": "2024-07-12T09:13:00.000000"
     }
   ]
   ```
 
 ## GET /api/log/count
 - 목적: 내 로그를 타입별로 집계
-- 응답 200: 항상 두 키를 포함하는 JSON 객체
+- 응답 200: 항상 세 키를 포함하는 JSON 객체
     - `info`: number (INFO 개수, 없으면 0)
+    - `warn`: number (WARN 개수, 없으면 0)
     - `error`: number (ERROR 개수, 없으면 0)
 - 예시: `GET /api/log/count`
   ```json
-  { "info": 12, "error": 3 }
+  { "info": 12, "warn": 2, "error": 3 }
   ```
 
 ## 오류 응답 참고

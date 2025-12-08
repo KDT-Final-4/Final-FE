@@ -40,6 +40,15 @@ const getLevelColor = (level: LogLevel) => {
   }
 };
 
+const parseProblemDetail = async (res: Response, fallback: string) => {
+  try {
+    const body = await res.json();
+    return body?.detail || body?.title || fallback;
+  } catch {
+    return fallback;
+  }
+};
+
 export function SystemLogs() {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [page, setPage] = useState(0);
@@ -60,22 +69,26 @@ export function SystemLogs() {
         credentials: 'include',
         headers: { Accept: 'application/json' },
       });
-      if (!res.ok) throw new Error('로그 카운트 조회 실패');
+      if (!res.ok) throw new Error(await parseProblemDetail(res, '로그 카운트 조회 실패'));
       const data = await res.json();
       setCounts({
-        info: data.info ?? 0,
-        warn: data.warn ?? data.warning ?? 0,
-        error: data.error ?? 0,
+        info: Number(data.info ?? 0),
+        warn: Number(data.warn ?? data.warning ?? 0),
+        error: Number(data.error ?? 0),
       });
     } catch (err) {
-      console.error(err);
+      setError(err instanceof Error ? err.message : '알 수 없는 오류');
     }
   };
 
   const fetchLogs = async ({ reset = false }: { reset?: boolean } = {}) => {
-    if (loading) return;
+    if (loading && !reset) return;
 
     const nextPage = reset ? 0 : page;
+    if (reset) {
+      setPage(0);
+      setHasMore(true);
+    }
     setLoading(true);
     setError(null);
 
@@ -90,7 +103,7 @@ export function SystemLogs() {
         credentials: 'include',
         headers: { Accept: 'application/json' },
       });
-      if (!res.ok) throw new Error('로그 조회 실패');
+      if (!res.ok) throw new Error(await parseProblemDetail(res, '로그 조회 실패'));
 
       const data: LogEntry[] = await res.json();
       setLogs((prev) => (reset ? data : [...prev, ...data]));
@@ -146,7 +159,6 @@ export function SystemLogs() {
       <div className="mb-8">
         <h1 className="text-gray-900 mb-2">로그 뷰어</h1>
         <p className="text-gray-600">
-          내 로그를 조회하고 검색하세요 (INFO {counts.info} · WARN {counts.warn} · ERROR {counts.error})
         </p>
       </div>
 
@@ -171,7 +183,7 @@ export function SystemLogs() {
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
               <Input
-                placeholder="로그 검색 (메시지, Job ID...)"
+                placeholder="로그 메시지 검색"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-10"

@@ -1,6 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
-import { MousePointerClick } from 'lucide-react';
+import { Button } from './ui/button';
+import { Table, TableBody, TableCell, TableCaption, TableHead, TableHeader, TableRow } from './ui/table';
+import { Badge } from './ui/badge';
+import { Skeleton } from './ui/skeleton';
+import { ExternalLink, Inbox, MousePointerClick } from 'lucide-react';
 import { api } from '@/lib/api';
 
 type DashboardStatus = {
@@ -32,33 +36,42 @@ export function Dashboard() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [periodDays, setPeriodDays] = useState<7 | 30>(7); // 최근 n일 필터
+    const mountedRef = useRef(true);
 
     useEffect(() => {
-        // 마운트 시점에 대시보드 요약(allClicks)과 콘텐츠 목록을 병렬로 조회
-        let ignore = false;
-        setLoading(true);
-        Promise.all([
-            api.get<DashboardStatus>('/dashboard/status'),
-            api.get<{ contents: DashboardContent[] }>('/dashboard/contents'),
-        ])
-            .then(([statusData, contentsData]) => {
-                if (ignore) return;
-                setStatus(statusData);
-                setContents(contentsData?.contents || []);
-                setError(null);
-            })
-            .catch((err: any) => {
-                if (ignore) return;
-                setError(err?.message || '대시보드 데이터를 불러오지 못했습니다.');
-            })
-            .finally(() => {
-                if (ignore) return;
-                setLoading(false);
-            });
         return () => {
-            ignore = true;
+            mountedRef.current = false;
         };
     }, []);
+
+    const fetchDashboard = async () => {
+        setLoading(true);
+        setError(null);
+        try {
+            const [statusData, contentsData] = await Promise.all([
+                api.get<DashboardStatus>('/dashboard/status'),
+                api.get<{ contents: DashboardContent[] }>('/dashboard/contents'),
+            ]);
+            if (!mountedRef.current) return;
+            setStatus(statusData);
+            setContents(contentsData?.contents || []);
+        } catch (err: any) {
+            if (!mountedRef.current) return;
+            setError(err?.message || '대시보드 데이터를 불러오지 못했습니다.');
+        } finally {
+            if (!mountedRef.current) return;
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        // 초기 데이터 로드
+        fetchDashboard();
+    }, []);
+
+    const handleRefresh = () => {
+        fetchDashboard();
+    };
 
     const recentItems = useMemo(() => {
         // 최근 콘텐츠 카드용 데이터: 기간 필터 → 수정일 우선 정렬 → 표시 필드만 추출
@@ -89,127 +102,193 @@ export function Dashboard() {
             }));
     }, [contents, periodDays]);
 
+    const kpiItems = [
+        {
+            key: 'clicks',
+            title: '총 클릭수',
+            description: '모든 콘텐츠의 클릭수',
+            value: formatNumber(status?.allClicks),
+            icon: <MousePointerClick className="h-5 w-5 text-foreground" />,
+        },
+    ];
+
     return (
-        <div className="p-8">
-            <div className="mb-8">
-                <h1 className="text-gray-900 mb-2">대시보드</h1>
-                <p className="text-gray-600">AI 콘텐츠 마케팅 성과를 한눈에 확인하세요</p>
+        <div className="px-4 py-6 md:px-8 md:py-8 space-y-6 max-w-6xl mx-auto">
+            <div className="space-y-1">
+                <h1 className="text-2xl font-semibold">대시보드</h1>
+                <p className="text-muted-foreground">AI 콘텐츠 마케팅 성과를 한눈에 확인하세요</p>
             </div>
 
-            <div className="max-w-5xl space-y-28 pr-6">
-                {/* KPI Cards: 총 클릭수 */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <Card>
-                        <CardContent className="pt-6">
-                            <div className="flex items-center justify-between mb-4">
-                                <div className="w-12 h-12 rounded-lg flex items-center justify-center bg-blue-50">
-                                    <MousePointerClick className="w-6 h-6 text-blue-600" />
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+                {kpiItems.map((item) => (
+                    <Card key={item.key}>
+                        <CardHeader className="flex flex-row items-start justify-between">
+                            <div className="space-y-1.5">
+                                <CardTitle>{item.title}</CardTitle>
+                                <p className="text-sm text-muted-foreground">{item.description}</p>
+                            </div>
+                            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary border border-primary/20">
+                                {item.icon}
+                            </div>
+                        </CardHeader>
+                        <CardContent className="space-y-2">
+                            {loading ? (
+                                <div className="space-y-2">
+                                    <Skeleton className="h-8 w-24" />
+                                    <Skeleton className="h-4 w-28" />
                                 </div>
-                                <span className="text-sm text-gray-500">
-                                  {loading ? '불러오는 중...' : error ? '오류' : '실시간'}
-                                </span>
-                            </div>
-                            <div className="text-gray-600 mb-1">총 클릭수</div>
-                            <div className="text-gray-900 text-2xl font-semibold">
-                                {loading ? '—' : formatNumber(status?.allClicks)}
-                            </div>
-                            {error ? (
-                                <p className="text-red-500 text-sm mt-2">데이터를 불러오지 못했습니다.</p>
                             ) : (
-                                <p className="text-gray-500 text-sm mt-2">모든 콘텐츠의 클릭수</p>
+                                <div className="space-y-1">
+                                    <div className="text-3xl font-semibold">{item.value}</div>
+                                    <p className="text-xs text-muted-foreground">집계 기준: 실시간</p>
+                                </div>
+                            )}
+                            {error && (
+                                <div className="flex items-center gap-2 text-sm text-destructive">
+                                    <span>데이터를 불러오지 못했습니다.</span>
+                                    <Button size="sm" variant="outline" onClick={handleRefresh}>
+                                        재시도
+                                    </Button>
+                                </div>
                             )}
                         </CardContent>
                     </Card>
-                </div>
-
-        {/* Recent Contents: API 기반 + contentLink 직접 이동 */}
-        <Card className="shadow-lg mt-6">
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-xl font-semibold">최근 콘텐츠 성과</CardTitle>
-              <div className="flex gap-2">
-                <button
-                  className={`px-3 py-1 rounded-md ${
-                    periodDays === 7 ? 'bg-blue-50 text-blue-600' : 'text-gray-600 hover:bg-gray-50'
-                  }`}
-                  onClick={() => setPeriodDays(7)}
-                >
-                  7일
-                </button>
-                <button
-                  className={`px-3 py-1 rounded-md ${
-                    periodDays === 30 ? 'bg-blue-50 text-blue-600' : 'text-gray-600 hover:bg-gray-50'
-                  }`}
-                  onClick={() => setPeriodDays(30)}
-                >
-                  30일
-                </button>
-              </div>
+                ))}
             </div>
-          </CardHeader>
-          <CardContent className="pb-8 pr-10">
-            {loading ? (
-              <p className="text-gray-500">불러오는 중...</p>
-            ) : error ? (
-              <p className="text-red-500">콘텐츠를 불러오지 못했습니다.</p>
-            ) : recentItems.length === 0 ? (
-              <p className="text-gray-500">표시할 콘텐츠가 없습니다.</p>
-            ) : (
-              <div className="overflow-x-auto">
-                <div className="min-w-[900px] overflow-hidden rounded-xl border border-gray-200 shadow-sm">
-                  <table className="w-full text-base">
-                    <thead className="bg-gradient-to-r from-blue-50 via-indigo-50 to-blue-50 text-gray-800 font-semibold">
-                      <tr>
-                        <th className="px-6 py-4 text-left border-b border-gray-200">글 제목</th>
-                        <th className="px-6 py-4 text-left border-b border-gray-200">작성일</th>
-                        <th className="px-6 py-4 text-left border-b border-gray-200">클릭수</th>
-                        <th className="px-6 py-4 text-left border-b border-gray-200">링크</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-200 bg-white">
-                      {recentItems.map((item) => (
-                      <tr
-                        key={item.id}
-                        className="hover:bg-blue-50/40 transition-colors even:bg-gray-50/40"
-                      >
-                        <td
-                          className="px-6 py-5 text-gray-900 font-medium truncate min-w-0"
-                          title={item.title || '제목 없음'}
+
+            <Card>
+                <CardHeader className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                    <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                            <CardTitle>최근 콘텐츠 성과</CardTitle>
+                            <Badge variant="secondary" className="bg-primary/10 text-primary border-primary/20">실시간</Badge>
+                        </div>
+                        <p className="text-sm text-muted-foreground">최근 {periodDays}일 작성 기준</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <Button
+                            size="sm"
+                            variant="outline"
+                            className={
+                                periodDays === 7
+                                    ? 'bg-green-100 text-green-800 border-green-200 hover:bg-green-100'
+                                    : 'text-foreground border-border hover:bg-muted'
+                            }
+                            onClick={() => setPeriodDays(7)}
                         >
-                          {item.title || '제목 없음'}
-                        </td>
-                        <td className="px-6 py-5 text-gray-700">{item.createdLabel}</td>
-                        <td className="px-6 py-5 text-gray-700">
-                          <div className="flex items-center gap-2">
-                            <MousePointerClick className="w-4 h-4 text-gray-500" />
-                            <span className="font-semibold text-gray-900">{formatNumber(item.clicks)}</span>
-                          </div>
-                        </td>
-                        <td className="px-6 py-5 text-gray-700">
-                          <div className="flex items-center gap-2">
-                            {item.link ? (
-                              <button
-                                className="px-4 py-2 text-sm rounded-lg border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 shrink-0"
-                                  onClick={() => window.open(item.link, '_blank', 'noreferrer')}
-                                  title="링크 열기"
-                                >
-                                  열기
-                                </button>
-                              ) : (
-                                <span className="text-gray-400">링크 없음</span>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+                            7일
+                        </Button>
+                        <Button
+                            size="sm"
+                            variant="outline"
+                            className={
+                                periodDays === 30
+                                    ? 'bg-green-100 text-green-800 border-green-200 hover:bg-green-100'
+                                    : 'text-foreground border-border hover:bg-muted'
+                            }
+                            onClick={() => setPeriodDays(30)}
+                        >
+                            30일
+                        </Button>
+                    </div>
+                </CardHeader>
+                <CardContent className="p-0">
+                    {loading ? (
+                        <Table className="min-w-[900px]">
+                            <TableHeader className="bg-muted/70">
+                                <TableRow className="h-12">
+                                    <TableHead>글 제목</TableHead>
+                                    <TableHead>키워드</TableHead>
+                                    <TableHead>작성일</TableHead>
+                                    <TableHead className="text-right">클릭수</TableHead>
+                                    <TableHead>링크</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {Array.from({ length: 5 }).map((_, idx) => (
+                                    <TableRow key={idx} className="h-12">
+                                        <TableCell className="w-1/3"><Skeleton className="h-4 w-full" /></TableCell>
+                                        <TableCell className="w-24"><Skeleton className="h-4 w-20" /></TableCell>
+                                        <TableCell className="w-32"><Skeleton className="h-4 w-24" /></TableCell>
+                                        <TableCell className="w-28"><Skeleton className="h-4 w-16" /></TableCell>
+                                        <TableCell className="w-24"><Skeleton className="h-8 w-16" /></TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    ) : error ? (
+                        <div className="flex items-center gap-3 p-6 text-sm text-destructive">
+                            <span>콘텐츠를 불러오지 못했습니다.</span>
+                            <Button size="sm" variant="outline" onClick={handleRefresh}>
+                                재시도
+                            </Button>
+                        </div>
+                    ) : recentItems.length === 0 ? (
+                        <div className="flex items-center gap-3 p-6 text-sm text-muted-foreground">
+                            <Inbox className="h-5 w-5 text-primary/50" />
+                            <span>표시할 콘텐츠가 없습니다.</span>
+                            <Button size="sm" variant="outline" onClick={handleRefresh}>
+                                새로고침
+                            </Button>
+                        </div>
+                    ) : (
+                        <Table className="min-w-[900px]">
+                            <TableHeader className="bg-muted/70">
+                                <TableRow className="h-12">
+                                    <TableHead>글 제목</TableHead>
+                                    <TableHead>키워드</TableHead>
+                                    <TableHead>작성일</TableHead>
+                                    <TableHead className="text-right">클릭수</TableHead>
+                                    <TableHead>링크</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {recentItems.map((item) => (
+                                    <TableRow key={item.id} className="h-12 even:bg-muted/40 hover:bg-primary/5">
+                                        <TableCell className="font-medium max-w-[320px] truncate" title={item.title || '제목 없음'}>
+                                            {item.title || '제목 없음'}
+                                        </TableCell>
+                                        <TableCell>
+                                            {item.keyword ? (
+                                                <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20">
+                                                    {item.keyword}
+                                                </Badge>
+                                            ) : (
+                                                <span className="text-muted-foreground">-</span>
+                                            )}
+                                        </TableCell>
+                                        <TableCell>{item.createdLabel}</TableCell>
+                                        <TableCell className="text-right">
+                                            <div className="inline-flex items-center gap-2">
+                                                <MousePointerClick className="h-4 w-4 text-green-700" />
+                                                <span className="font-semibold">{formatNumber(item.clicks)}</span>
+                                            </div>
+                                        </TableCell>
+                                        <TableCell>
+                                            {item.link ? (
+                                                <Button
+                                                    size="sm"
+                                                    variant="default"
+                                                    className="bg-blue-100 text-blue-800 hover:bg-blue-200 border border-blue-200 gap-1"
+                                                    onClick={() => window.open(item.link, '_blank', 'noreferrer')}
+                                                >
+                                                    <ExternalLink className="h-4 w-4" />
+                                                    열기
+                                                </Button>
+                                            ) : (
+                                                <span className="text-muted-foreground">링크 없음</span>
+                                            )}
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                            <TableCaption className="text-left">
+                                최근 {periodDays}일 동안 작성된 콘텐츠 기준
+                            </TableCaption>
+                        </Table>
+                    )}
+                </CardContent>
+            </Card>
         </div>
     );
 }

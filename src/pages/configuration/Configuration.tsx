@@ -296,11 +296,13 @@ export function ConfigurationPage() {
   const isSlackChannel = notification.channelId === 2;
 
   return (
-    <div className="p-6 space-y-6">
-      <div>
-        <Settings className="w-10 h-10 text-foreground" />
-    {/* <h1 className="text-3xl font-semibold text-foreground">설정</h1> */}
-        <p className="text-muted-foreground mt-2">
+    <div className="p-6">
+      <div className="flex items-center gap-2 text-muted-foreground mt-2">
+        <Settings className="w-10 h-10 text-foreground" /> 
+        <h1 className="text-2xl text-foreground">설정</h1>
+      </div>
+      <div className="flex text-muted-foreground mb-6">
+        <p>
           LLM, 스케줄, 알림 설정을 관리하세요.
         </p>
       </div>

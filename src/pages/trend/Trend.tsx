@@ -1,204 +1,179 @@
-import { useState } from "react";
-import { Calendar, Download, Leaf, TrendingUp, Zap, Activity, BarChart3, Waves } from "lucide-react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../../components/ui/card";
-import { Button } from "../../components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../components/ui/tabs";
+import { useMemo, useState } from "react";
 import { Badge } from "../../components/ui/badge";
-import { TrendChart } from "./TrendChart";
-import { RealtimeDataPanel } from "../../components/RealtimeDataPanel";
-import { SummaryReportTable } from "../../components/SummaryReportTable";
-import { EnvironmentalImpact } from "./EnvironmentalImpact";
+import { Button } from "../../components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../../components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../components/ui/tabs";
+import {Waves} from "lucide-react";
 
-interface AnalyticsData {
-  deviceId: string;
-  timestamp: string;
-  kvah: number;
-  billing: number;
-  kva: number;
-  kw: number;
-  kwh: number;
-  pf: number;
-  kvarh_lag: number;
-  kvarh_lead: number;
-  co2_emissions: number;
+interface TrendItem {
+  rank: number;
+  keyword: string;
+  searchVolume: string;
+  category: string;
 }
 
+interface PlatformConfig {
+  id: PlatformId;
+  name: string;
+  description: string;
+  highlight: string;
+}
+
+type PlatformId = "google" | "instagram" | "x";
+
+type PlatformTrendMap = Record<PlatformId, TrendItem[]>;
+
+const platforms: PlatformConfig[] = [
+  {
+    id: "google",
+    name: "Google Trends",
+    description: "검색 기반 실시간 이슈",
+    highlight: "일일 검색량 +32%"
+  },
+  {
+    id: "instagram",
+    name: "Instagram",
+    description: "소셜 트렌드 & 챌린지",
+    highlight: "콘텐츠 참여율 +18%"
+  },
+  {
+    id: "x",
+    name: "X",
+    description: "바이럴 뉴스 & 밈",
+    highlight: "실시간 언급량 +45%"
+  }
+];
+
+const platformTrends: PlatformTrendMap = {
+  google: [
+    { rank: 1, keyword: "AI 컨퍼런스 2024", searchVolume: "1.2M", category: "테크" },
+    { rank: 2, keyword: "여름휴가 핫플", searchVolume: "958K", category: "라이프스타일" },
+    { rank: 3, keyword: "K-푸드 페스티벌", searchVolume: "812K", category: "푸드" }
+  ],
+  instagram: [
+    { rank: 1, keyword: "#EcoHome 챌린지", searchVolume: "674K", category: "캠페인" },
+    { rank: 2, keyword: "도시 감성사진", searchVolume: "602K", category: "크리에이티브" },
+    { rank: 3, keyword: "한강 피크닉", searchVolume: "521K", category: "라이프스타일" }
+  ],
+  x: [
+    { rank: 1, keyword: "기후 테크 규제", searchVolume: "433K", category: "정책" },
+    { rank: 2, keyword: "우주 관광", searchVolume: "389K", category: "테크" },
+    { rank: 3, keyword: "글로벌 음악 시상식", searchVolume: "347K", category: "엔터테인먼트" }
+  ]
+};
+
 export function Trend() {
-  const [selectedDevice, setSelectedDevice] = useState("device-001");
-  const [selectedShift, setSelectedShift] = useState("all");
-  const [selectedGraphType, setSelectedGraphType] = useState("consumption");
+  const [activePlatform, setActivePlatform] = useState<PlatformId>("google");
 
-  // Mock devices data
-  const devices = [
-    { id: "device-001", name: "Main Power Panel A", location: "Building A - Floor 1" },
-    { id: "device-002", name: "HVAC Control Unit", location: "Building A - Floor 2" },
-    { id: "device-003", name: "Manufacturing Line 1", location: "Production Floor" },
-    { id: "device-004", name: "Lighting Circuit B", location: "Building B - All Floors" },
-    { id: "device-005", name: "Server Room UPS", location: "Data Center" }
-  ];
-
-  const shifts = [
-    { id: "all", name: "All Shifts" },
-    { id: "morning", name: "Morning Shift (6AM - 2PM)" },
-    { id: "afternoon", name: "Afternoon Shift (2PM - 10PM)" },
-    { id: "night", name: "Night Shift (10PM - 6AM)" }
-  ];
-
-  const graphTypes = [
-    { id: "consumption", name: "Consumption", icon: TrendingUp },
-    { id: "parameterized", name: "Parameterized View", icon: BarChart3 },
-    { id: "harmonic", name: "Harmonic Analysis", icon: Waves }
-  ];
-
-  // Mock analytics data
-  const mockData: AnalyticsData[] = Array.from({ length: 24 }, (_, i) => ({
-    deviceId: selectedDevice,
-    timestamp: `${String(i).padStart(2, '0')}:00`,
-    kvah: 45 + Math.random() * 20,
-    billing: (45 + Math.random() * 20) * 8.5, // ₹8.5 per unit
-    kva: 42 + Math.random() * 18,
-    kw: 38 + Math.random() * 15,
-    kwh: 35 + Math.random() * 25,
-    pf: 0.85 + Math.random() * 0.1,
-    kvarh_lag: 12 + Math.random() * 8,
-    kvarh_lead: 8 + Math.random() * 5,
-    co2_emissions: (35 + Math.random() * 25) * 0.82 // kg CO2 per kWh
-  }));
-
-  const selectedDeviceInfo = devices.find(d => d.id === selectedDevice);
+  const tableRows = useMemo(
+    () =>
+      platforms.flatMap((platform) =>
+        platformTrends[platform.id].map((trend) => ({
+          ...trend,
+          platform: platform.name
+        }))
+      ),
+    []
+  );
 
   return (
-    <div className="p-6 space-y-6 bg-background min-h-full">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-semibold text-foreground">Trend</h1>
-          <p className="text-muted-foreground mt-1">
-            Detailed device-specific energy analysis and insights
+    <div className="min-h-screen" style={{ backgroundColor: "#f8faf9" }}>
+      <div className="p-6">
+        <header className="space-y-2 mb-6">
+          <p className="text-sm font-medium text-primary">실시간 트렌드 허브</p>
+          <h1 className="text-3xl font-semibold text-foreground">플랫폼별 인기 검색어 인사이트</h1>
+          <p className="text-muted-foreground">
+            플랫폼을 전환하며 인기 검색어와 검색량을 비교해 보고, 바로 콘텐츠 제작으로 연결해 보세요.
           </p>
-        </div>
-        <Button variant="outline" className="gap-2">
-          <Download className="w-4 h-4" />
-          Export All Data
-        </Button>
-      </div>
+        </header>
 
-      {/* Filters Section */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Activity className="w-5 h-5 text-primary" />
-            Analysis Filters
-          </CardTitle>
-          <CardDescription>
-            Configure your analysis parameters and view settings
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {/* Device Selection */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Device Selection</label>
-              <Select value={selectedDevice} onValueChange={setSelectedDevice}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select device" />
-                </SelectTrigger>
-                <SelectContent>
-                  {devices.map((device) => (
-                    <SelectItem key={device.id} value={device.id}>
-                      <div>
-                        <div className="font-medium">{device.name}</div>
-                        <div className="text-xs text-muted-foreground">{device.location}</div>
+        <Tabs className="mb-6" value={activePlatform} onValueChange={(value) => setActivePlatform(value as PlatformId)}>
+          <TabsList className="grid w-full grid-cols-3">
+            {platforms.map((platform) => (
+              <TabsTrigger
+                key={platform.id}
+                value={platform.id}
+                className="flex items-center gap-2"
+              >
+                <span className="flex items-center gap-2">
+                  <Waves className="w-4 h-4" />
+                  {platform.name}
+                </span>
+                <span className="flex items-center gap-2 text-xs text-muted-foreground">
+                  {platform.description}
+                </span>
+                {/*<span className="text-xs text-primary/80">{platform.highlight}</span>*/}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+
+          {platforms.map((platform) => (
+            <TabsContent key={platform.id} value={platform.id} className="space-y-4">
+              <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-3">
+                {platformTrends[platform.id].map((trend) => (
+                  <Card key={`${platform.id}-${trend.rank}`} className="border border-primary/10 shadow-sm">
+                    <CardHeader className="space-y-3 pb-2">
+                      <div className="flex items-center justify-between text-xs text-muted-foreground">
+                        <span>순위 #{trend.rank}</span>
+                        <Badge variant="secondary">{trend.category}</Badge>
                       </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Shift Selection */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Shift Filter</label>
-              <Select value={selectedShift} onValueChange={setSelectedShift}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select shift" />
-                </SelectTrigger>
-                <SelectContent>
-                  {shifts.map((shift) => (
-                    <SelectItem key={shift.id} value={shift.id}>
-                      {shift.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Graph Type Selection */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Graph Type</label>
-              <Select value={selectedGraphType} onValueChange={setSelectedGraphType}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select graph type" />
-                </SelectTrigger>
-                <SelectContent>
-                  {graphTypes.map((type) => {
-                    const Icon = type.icon;
-                    return (
-                      <SelectItem key={type.id} value={type.id}>
-                        <div className="flex items-center gap-2">
-                          <Icon className="w-4 h-4" />
-                          {type.name}
-                        </div>
-                      </SelectItem>
-                    );
-                  })}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          {/* Selected Device Info */}
-          {selectedDeviceInfo && (
-            <div className="mt-4 p-4 bg-accent/50 rounded-lg">
-              <div className="flex items-center gap-3">
-                <div className="w-2 h-2 bg-primary rounded-full animate-pulse"></div>
-                <div>
-                  <h4 className="font-medium">{selectedDeviceInfo.name}</h4>
-                  <p className="text-sm text-muted-foreground">{selectedDeviceInfo.location}</p>
-                </div>
-                <Badge variant="secondary" className="ml-auto">Active</Badge>
+                      <CardTitle className="text-lg font-semibold leading-tight">{trend.keyword}</CardTitle>
+                      <CardDescription>선택한 플랫폼에서 급상승 중인 검색어</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="rounded-lg bg-muted/60 p-3">
+                        <p className="text-xs text-muted-foreground">검색량</p>
+                        <p className="text-2xl font-bold text-foreground">{trend.searchVolume}</p>
+                      </div>
+                      <Button className="w-full bg-sidebar-primary">콘텐츠 생성하기</Button>
+                    </CardContent>
+                  </Card>
+                ))}
               </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+            </TabsContent>
+          ))}
+        </Tabs>
 
-      {/* Environmental Impact */}
-      <EnvironmentalImpact data={mockData} />
-
-      {/* Main Analytics Content */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        {/* Charts Section - Takes 2/3 width */}
-        <div className="xl:col-span-2 space-y-6">
-          <TrendChart 
-            data={mockData} 
-            graphType={selectedGraphType}
-            deviceName={selectedDeviceInfo?.name || "Unknown Device"}
-          />
-        </div>
-
-        {/* Real-time Data Panel - Takes 1/3 width */}
-        <div className="space-y-6">
-          <RealtimeDataPanel data={mockData[mockData.length - 1]} />
-        </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>전체 플랫폼 인기 검색어</CardTitle>
+            <CardDescription>플랫폼을 통합한 상위 키워드를 한눈에 비교하세요.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-16">순위</TableHead>
+                  <TableHead>키워드명</TableHead>
+                  <TableHead>플랫폼</TableHead>
+                  <TableHead>카테고리</TableHead>
+                  <TableHead className="text-right">검색량</TableHead>
+                  <TableHead className="text-right">생성하기</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {tableRows.map((row) => (
+                  <TableRow key={`${row.platform}-${row.rank}-${row.keyword}`}>
+                    <TableCell>#{row.rank}</TableCell>
+                    <TableCell className="font-medium">{row.keyword}</TableCell>
+                    <TableCell>{row.platform}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline">{row.category}</Badge>
+                    </TableCell>
+                    <TableCell className="text-right font-semibold">{row.searchVolume}</TableCell>
+                    <TableCell className="text-right">
+                      <Button size="sm" variant="outline">
+                        생성하기
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
       </div>
-
-      {/* Summary Report Table */}
-      <SummaryReportTable 
-        data={mockData} 
-        deviceName={selectedDeviceInfo?.name || "Unknown Device"}
-      />
     </div>
   );
 }

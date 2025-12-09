@@ -1,6 +1,6 @@
 import { LineChart, Line, AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../../components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../components/ui/tabs";
 import { TrendingUp, BarChart3, Waves } from "lucide-react";
 
 interface AnalyticsData {
@@ -17,13 +17,13 @@ interface AnalyticsData {
   co2_emissions: number;
 }
 
-interface TrendChartProps {
+interface AnalyticsChartProps {
   data: AnalyticsData[];
   graphType: string;
   deviceName: string;
 }
 
-export function TrendChart({ data, graphType, deviceName }: TrendChartProps) {
+export function AnalyticsChart({ data, graphType, deviceName }: AnalyticsChartProps) {
   const renderConsumptionChart = () => (
     <ResponsiveContainer width="100%" height={400}>
       <AreaChart data={data}>

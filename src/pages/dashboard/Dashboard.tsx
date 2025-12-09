@@ -15,6 +15,17 @@ type UserMeResponse = {
   isDelete?: boolean;
 };
 
+type DashboardStatusResponse = {
+  allClicks?: number;
+  allViews?: number;
+  visitors?: number;
+  averageDwellTime?: number;
+};
+
+type ContentsCountResponse = {
+  contentsCount?: number;
+};
+
 export function Dashboard() {
   const [selectedFilterType, setSelectedFilterType] = useState<"device" | "virtual-group">("device");
   const [selectedDevice, setSelectedDevice] = useState("device-1");
@@ -22,6 +33,8 @@ export function Dashboard() {
   const [dataMode, setDataMode] = useState("real-time");
   const [selectedDay, setSelectedDay] = useState("today");
   const [userName, setUserName] = useState("");
+  const [dashboardStatus, setDashboardStatus] = useState<DashboardStatusResponse | null>(null);
+  const [contentsCount, setContentsCount] = useState<number | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -67,6 +80,55 @@ export function Dashboard() {
     };
 
     fetchUserName();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchDashboardData = async () => {
+      const statusEndpoint = "/api/dashboard/status";
+      const contentsCountEndpoint = "/api/dashboard/contents/count";
+
+      try {
+        console.log("[Dashboard] fetching status from", statusEndpoint);
+        console.log("[Dashboard] fetching contents count from", contentsCountEndpoint);
+
+        const [statusResponse, contentsCountResponse] = await Promise.all([
+          fetch(statusEndpoint, { credentials: "include" }),
+          fetch(contentsCountEndpoint, { credentials: "include" }),
+        ]);
+
+        const statusContentType = statusResponse.headers.get("content-type") || "unknown";
+        if (statusResponse.ok && statusContentType.includes("application/json")) {
+          const statusData: DashboardStatusResponse = await statusResponse.json();
+          console.log("[Dashboard] status payload", statusEndpoint, statusData);
+          if (isMounted) {
+            setDashboardStatus(statusData);
+          }
+        } else {
+          console.error("[Dashboard] failed to fetch status", statusEndpoint, statusResponse.status, statusContentType);
+        }
+
+        const contentsContentType = contentsCountResponse.headers.get("content-type") || "unknown";
+        if (contentsCountResponse.ok && contentsContentType.includes("application/json")) {
+          const countData: ContentsCountResponse = await contentsCountResponse.json();
+          console.log("[Dashboard] contents count payload", contentsCountEndpoint, countData);
+          if (isMounted && typeof countData.contentsCount === "number") {
+            setContentsCount(countData.contentsCount);
+          }
+        } else {
+          console.error("[Dashboard] failed to fetch contents count", contentsCountEndpoint, contentsCountResponse.status, contentsContentType);
+        }
+      } catch (error) {
+        console.error("[Dashboard] failed to fetch dashboard data", error);
+      }
+    };
+
+    fetchDashboardData();
 
     return () => {
       isMounted = false;
@@ -135,6 +197,8 @@ export function Dashboard() {
         <EnergyParameters 
           dataMode={dataMode} 
           selectedDevice={selectedFilterType === "device" ? selectedDevice : selectedDevices.join(",")} 
+          totalViews={dashboardStatus?.allClicks}
+          contentsCount={contentsCount ?? undefined}
         />
 
         {/* Charts Section */}

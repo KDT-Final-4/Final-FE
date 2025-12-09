@@ -5,29 +5,31 @@ import { TrendingUp, TrendingDown, Minus } from "lucide-react";
 interface EnergyParametersProps {
   dataMode: string;
   selectedDevice: string;
+  totalViews?: number;
+  contentsCount?: number;
 }
 
-export function EnergyParameters({ dataMode, selectedDevice }: EnergyParametersProps) {
+export function EnergyParameters({ dataMode, selectedDevice, totalViews, contentsCount }: EnergyParametersProps) {
   // Mock data - in real app this would come from API
   const parameters = [
     {
-      id: "kva",
-      name: "KVA",
-      fullName: "Apparent Power",
-      value: "1,245.6",
-      unit: "kVA",
-      change: "+5.2%",
-      trend: "up",
+      id: "views",
+      name: "총 조회수",
+      fullName: "Total Views",
+      value: totalViews !== undefined ? totalViews.toLocaleString() : "-",
+      unit: "회",
+      change: "+0%",
+      trend: "stable",
       status: "normal",
     },
     {
-      id: "kwh",
-      name: "KWH",
-      fullName: "Energy Consumption",
-      value: "8,932.4",
-      unit: "kWh",
-      change: "+12.8%",
-      trend: "up",
+      id: "contents",
+      name: "총 콘텐츠 수",
+      fullName: "Total Contents",
+      value: contentsCount !== undefined ? contentsCount.toLocaleString() : "-",
+      unit: "개",
+      change: "+0%",
+      trend: "stable",
       status: "high",
     },
     {

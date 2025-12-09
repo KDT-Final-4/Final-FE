@@ -7,7 +7,7 @@ import { Switch } from "../../components/ui/switch";
 import { Textarea } from "../../components/ui/textarea";
 import { Button } from "../../components/ui/button";
 import { Separator } from "../../components/ui/separator";
-import { Car } from "lucide-react";
+import { Car, Settings } from "lucide-react";
 
 type LlmSetting = {
   id: number | null;
@@ -28,6 +28,15 @@ type ScheduleItem = {
   maxDailyRuns: number;
   retryOnFail: number;
   isRun: boolean;
+};
+
+type NotificationSetting = {
+  id: number | null;
+  userId: number | null;
+  channelId: number;
+  webhookUrl: string;
+  apiToken: string;
+  isActive: boolean;
 };
 
 const MODEL_OPTIONS: Record<string, string[]> = {
@@ -70,6 +79,19 @@ export function ConfigurationPage() {
   const [scheduleSaving, setScheduleSaving] = useState(false);
   const [scheduleError, setScheduleError] = useState<string | null>(null);
   const [scheduleSaved, setScheduleSaved] = useState(false);
+
+  const [notification, setNotification] = useState<NotificationSetting>({
+    id: null,
+    userId: null,
+    channelId: 1,
+    webhookUrl: "",
+    apiToken: "",
+    isActive: true,
+  });
+  const [notificationLoading, setNotificationLoading] = useState(false);
+  const [notificationSaving, setNotificationSaving] = useState(false);
+  const [notificationError, setNotificationError] = useState<string | null>(null);
+  const [notificationSaved, setNotificationSaved] = useState(false);
 
   useEffect(() => {
     const fetchLlmSetting = async () => {
@@ -126,6 +148,32 @@ export function ConfigurationPage() {
     };
 
     fetchScheduleSetting();
+  }, []);
+
+  useEffect(() => {
+    const fetchNotificationSetting = async () => {
+      setNotificationLoading(true);
+      setNotificationError(null);
+      try {
+        const response = await fetch("/api/setting/notification");
+        if (!response.ok) throw new Error("알림 설정을 불러오지 못했습니다.");
+        const data = await response.json();
+        setNotification({
+          id: data.id ?? null,
+          userId: data.userId ?? null,
+          channelId: Number.isFinite(Number(data.channelId)) ? Number(data.channelId) : 0,
+          webhookUrl: data.webhookUrl ?? "",
+          apiToken: data.apiToken ?? "",
+          isActive: Boolean(data.isActive),
+        });
+      } catch (error) {
+        setNotificationError(error instanceof Error ? error.message : "알림 설정을 불러오지 못했습니다.");
+      } finally {
+        setNotificationLoading(false);
+      }
+    };
+
+    fetchNotificationSetting();
   }, []);
 
   const saveLlmSetting = async () => {
@@ -205,13 +253,53 @@ export function ConfigurationPage() {
     }
   };
 
+  const saveNotificationSetting = async () => {
+    if (notification.id === null || notification.id === undefined) {
+      setNotificationError("알림 설정 ID가 없어 저장할 수 없습니다. 먼저 설정을 불러오세요.");
+      return;
+    }
+    setNotificationSaving(true);
+    setNotificationSaved(false);
+    setNotificationError(null);
+    try {
+      const response = await fetch(`/api/setting/notification/${notification.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          channelId: notification.channelId,
+          webhookUrl: notification.webhookUrl ?? "",
+          apiToken: notification.apiToken ?? "",
+          isActive: notification.isActive,
+        }),
+      });
+      if (!response.ok) throw new Error("알림 설정 저장에 실패했습니다.");
+      const data = await response.json();
+      setNotification({
+        id: data.id ?? notification.id,
+        userId: data.userId ?? notification.userId ?? null,
+        channelId: Number.isFinite(Number(data.channelId)) ? Number(data.channelId) : notification.channelId,
+        webhookUrl: data.webhookUrl ?? notification.webhookUrl,
+        apiToken: data.apiToken ?? notification.apiToken,
+        isActive: Boolean(data.isActive),
+      });
+      setNotificationSaved(true);
+    } catch (error) {
+      setNotificationError(error instanceof Error ? error.message : "알림 설정 저장에 실패했습니다.");
+    } finally {
+      setNotificationSaving(false);
+    }
+  };
+
   const providerKey = MODEL_OPTIONS[llmSetting.name] ? llmSetting.name : "OpenAI";
   const modelOptions = MODEL_OPTIONS[providerKey] || [];
+  const isEmailChannel = notification.channelId === 1;
+  const isSlackChannel = notification.channelId === 2;
 
   return (
     <div className="p-6 space-y-6">
       <div>
-        <h1 className="text-3xl font-semibold text-foreground">설정</h1>
+        <Settings className="w-10 h-10 text-foreground" />
+    {/* <h1 className="text-3xl font-semibold text-foreground">설정</h1> */}
         <p className="text-muted-foreground mt-2">
           LLM, 스케줄, 알림 설정을 관리하세요.
         </p>
@@ -224,6 +312,8 @@ export function ConfigurationPage() {
             <TabsTrigger value="notification">Notification</TabsTrigger>
           </TabsList>
 
+
+        {/* LLM Setting */}
         <TabsContent value="llm" className="pt-4">
           <div className="mb-6 grid gap-4 md:grid-cols-2">
             {/* Model */}
@@ -411,7 +501,6 @@ export function ConfigurationPage() {
             </Card>
           </div>
           
-          <div className="mb-6 flex items-center justify-between">
             {llmError && <p className="text-sm text-destructive">{llmError}</p>}
             {llmLoading && <p className="text-sm text-muted-foreground">LLM 설정을 불러오는 중...</p>}
             {llmSaved && !llmError && <p className="text-sm text-emerald-600">LLM 설정이 저장되었습니다.</p>}
@@ -419,19 +508,9 @@ export function ConfigurationPage() {
             <Button className="w-full" onClick={saveLlmSetting} disabled={llmSaving || llmLoading}>
               {llmSaving ? "저장 중..." : "LLM 설정 저장"}
             </Button>
-          </div>
         </TabsContent>
-        {/* ㄴ */}
+        {/* Schedule Setting */}
         <TabsContent value="schedule" className="pt-4">
-           <div className="flex items-center justify-between rounded-lg border p-3">
-                {scheduleError && <p className="text-sm text-destructive">{scheduleError}</p>}
-                {scheduleLoading && <p className="text-sm text-muted-foreground">스케줄 설정을 불러오는 중...</p>}
-                {scheduleSaved && !scheduleError && <p className="text-sm text-emerald-600">스케줄 설정이 저장되었습니다.</p>}
-
-                <Button className="w-full" onClick={saveScheduleSetting} disabled={scheduleSaving || scheduleLoading || schedule.id === null}>
-                  {scheduleSaving ? "저장 중..." : "스케줄 설정 저장"}
-                </Button>
-              </div>
           <Card>
             <CardHeader>
               <CardTitle>스케줄 설정</CardTitle>
@@ -482,54 +561,76 @@ export function ConfigurationPage() {
                 </div>
                  <Switch checked={schedule.isRun} onCheckedChange={(checked) => setSchedule((prev) => ({ ...prev, isRun: checked }))} />
               </div>
+              {scheduleError && <p className="text-sm text-destructive">{scheduleError}</p>}
+              {scheduleLoading && <p className="text-sm text-muted-foreground">스케줄 설정을 불러오는 중...</p>}
+              {scheduleSaved && !scheduleError && <p className="text-sm text-emerald-600">스케줄 설정이 저장되었습니다.</p>}
+
+              <Button className="w-full" onClick={saveScheduleSetting} disabled={scheduleSaving || scheduleLoading || schedule.id === null}>
+                {scheduleSaving ? "저장 중..." : "스케줄 설정 저장"}
+              </Button>
             </CardContent>
           </Card>
         </TabsContent>
-
+        {/* notification Setting */}
         <TabsContent value="notification" className="pt-4">
           <Card>
             <CardHeader>
               <CardTitle>알림 설정</CardTitle>
-              <CardDescription>이메일 및 웹훅 알림을 구성합니다.</CardDescription>
+              <CardDescription>알림 채널과 웹훅, 토큰을 설정합니다.</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="email">이메일 수신자</Label>
-                <Input id="email" type="email" placeholder="alert@company.com" />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="webhook">Webhook URL</Label>
-                <Input id="webhook" type="url" placeholder="https://hooks.slack.com/..." />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="rules">알림 규칙</Label>
-                <Textarea
-                  id="rules"
-                  rows={4}
-                  placeholder="예) 에러 발생 시 알림, 매일 09:00 요약 전송 등"
-                />
-              </div>
-
-              <div className="grid gap-3 md:grid-cols-2">
-                <div className="flex items-center justify-between rounded-lg border p-3">
-                  <div>
-                    <p className="font-medium">이메일 알림</p>
-                    <p className="text-sm text-muted-foreground">중요 이벤트를 이메일로 전달합니다.</p>
+            <CardContent className="space-y-6">
+              <div className="grid gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="channelId">채널</Label>
+                  <div className="outline-input">
+                    <select
+                      id="channelId"
+                      className="w-full bg-transparent px-3 py-2 text-sm outline-none"
+                      value={notification.channelId}
+                      onChange={(e) =>
+                        setNotification((prev) => ({
+                          ...prev,
+                          channelId: Number.isFinite(Number(e.target.value)) ? Number(e.target.value) : 1,
+                        }))
+                      }
+                    >
+                      <option value={1}>Email</option>
+                      <option value={2}>Slack</option>
+                    </select>
                   </div>
-                  <Switch defaultChecked />
-                </div>
-                <div className="flex items-center justify-between rounded-lg border p-3">
-                  <div>
-                    <p className="font-medium">실시간 웹훅</p>
-                    <p className="text-sm text-muted-foreground">웹훅으로 즉시 알림을 보냅니다.</p>
-                  </div>
-                  <Switch />
                 </div>
               </div>
 
-              <Button className="w-full">알림 설정 저장</Button>
+              {isSlackChannel && (
+                <div className="space-y-2">
+                  <Label htmlFor="webhookUrl">Webhook URL</Label>
+                  <div className="outline-input">
+                    <Input
+                      id="webhookUrl"
+                      type="url"
+                      value={notification.webhookUrl}
+                      onChange={(e) => setNotification((prev) => ({ ...prev, webhookUrl: e.target.value }))}
+                      placeholder="https://hooks.slack.com/..."
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div className="flex items-center justify-between rounded-lg border p-3">
+                <div>
+                  <p className="font-medium">알림 활성화</p>
+                  <p className="text-sm text-muted-foreground">알림 채널 사용 여부를 설정합니다.</p>
+                </div>
+                <Switch checked={notification.isActive} onCheckedChange={(checked) => setNotification((prev) => ({ ...prev, isActive: checked }))} />
+              </div>
+
+              {notificationError && <p className="text-sm text-destructive">{notificationError}</p>}
+              {notificationLoading && <p className="text-sm text-muted-foreground">알림 설정을 불러오는 중...</p>}
+              {notificationSaved && !notificationError && <p className="text-sm text-emerald-600">알림 설정이 저장되었습니다.</p>}
+
+              <Button className="w-full" onClick={saveNotificationSetting} disabled={notificationSaving || notificationLoading || notification.id === null}>
+                {notificationSaving ? "저장 중..." : "알림 설정 저장"}
+              </Button>
             </CardContent>
           </Card>
         </TabsContent>

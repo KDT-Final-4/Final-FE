@@ -7,6 +7,7 @@ export default defineConfig(({ mode }) => {
 
   const apiBase = env.VITE_API_BASE_URL ?? '/api';
   const backendTarget = env.VITE_BACKEND_TARGET ?? 'http://localhost:8080';
+  const frontendOrigin = env.VITE_FRONTEND_ORIGIN ?? 'http://localhost:3000';
 
   return {
     plugins: [react()],
@@ -62,7 +63,7 @@ export default defineConfig(({ mode }) => {
       port: 3000,
       open: true,
       cors: {
-        origin: true,
+        origin: frontendOrigin,
         credentials: true,
       },
       proxy: {

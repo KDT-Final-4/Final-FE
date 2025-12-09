@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { cn } from "./ui/utils";
 import { 
   LayoutDashboard, 
@@ -7,59 +8,130 @@ import {
   FileText, 
   User,
   Zap,
-  X
+  X,
+  Logs,
+  LogOut,
 } from "lucide-react";
 
-interface SidebarProps {
-  currentPage: string;
-  onPageChange: (page: string) => void;
-}
-
-export function Sidebar({ currentPage, onPageChange }: SidebarProps) {
+export function Sidebar() {
   const [isExpanded, setIsExpanded] = useState(false);
+  const [userName, setUserName] = useState("");
+  const [userEmail, setUserEmail] = useState("");
+  const navigate = useNavigate();
+  const { pathname } = useLocation();
 
-  const handleNavigationClick = (pageId: string) => {
+  const handleNavigationClick = (path: string) => {
     if (!isExpanded) {
       setIsExpanded(true);
       // Delay the page change to allow expansion animation
-      setTimeout(() => onPageChange(pageId), 150);
+      setTimeout(() => navigate(path), 150);
     } else {
-      onPageChange(pageId);
+      navigate(path);
     }
   };
   
   const navigationItems = [
     {
       id: "dashboard",
-      name: "Dashboard",
+      path: "/dashboard",
+      name: "대시보드",
       icon: LayoutDashboard,
       description: "Overview & monitoring"
     },
     {
       id: "trend",
-      name: "Trend", 
+      path: "/trend",
+      name: "트렌드", 
       icon: BarChart3,
-      description: "Energy trends"
-    },
-    {
-      id: "configuration",
-      name: "Configuration",
-      icon: Settings,
-      description: "System settings"
+      description: "Current trends"
     },
     {
       id: "reports",
-      name: "Reports",
+      path: "/reports",
+      name: "검수",
       icon: FileText,
-      description: "Generate reports"
+      description: "Review reports"
     },
     {
-      id: "settings",
-      name: "Settings & Profile",
-      icon: User,
-      description: "User preferences"
+      id: "logs",
+      path: "/logs",
+      name: "로그",
+      icon: Logs,
+      description: "Upload contents log"
+    },
+    {
+      id: "configuration",
+      path: "/configuration",
+      name: "설정",
+      icon: Settings,
+      description: "System settings"
     }
+    // },
+    // {
+    //   id: "profile",
+    //   path: "/profile",
+    //   name: "프로필",
+    //   icon: User,
+    //   description: "User preferences"
+    // }
   ];
+
+  const displayName = userName || userEmail || "";
+  const initials =
+    displayName
+      .split(" ")
+      .map((word) => word.charAt(0))
+      .join("")
+      .slice(0, 2)
+      .toUpperCase() || "U";
+
+  useEffect(() => {
+    let active = true;
+
+    const fetchUser = async () => {
+      try {
+        const response = await fetch("/api/user/me", { credentials: "include" });
+        const contentType = response.headers.get("content-type") || "";
+        if (!contentType.includes("application/json")) {
+          console.error("[Sidebar] unexpected content-type for /api/user/me", contentType);
+          return;
+        }
+        if (!response.ok) {
+          console.error("[Sidebar] failed to fetch /api/user/me", response.status);
+          return;
+        }
+        const data = await response.json();
+        if (!active) return;
+        setUserName(data?.name ?? "");
+        setUserEmail(data?.email ?? "");
+      } catch (error) {
+        console.error("[Sidebar] error fetching /api/user/me", error);
+      }
+    };
+
+    fetchUser();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const handleProfileClick = () => {
+    if (!isExpanded) {
+      setIsExpanded(true);
+    }
+    navigate("/profile");
+  };
+
+  const handleLogout = () => {
+    try {
+      localStorage.removeItem("isAuthenticated");
+    } catch (error) {
+      console.error("[Sidebar] failed to clear auth flag", error);
+    }
+    navigate("/");
+    window.location.reload();
+  };
 
   return (
     <div className="ml-6 my-6">
@@ -88,10 +160,10 @@ export function Sidebar({ currentPage, onPageChange }: SidebarProps) {
           {isExpanded && (
             <div className="mt-3 text-center">
               <h2 className="text-sidebar-foreground font-semibold text-base whitespace-nowrap">
-                EMS Control
+                AURA
               </h2>
               <p className="text-sidebar-foreground/70 text-xs whitespace-nowrap mt-1">
-                Energy Management
+
               </p>
             </div>
           )}
@@ -102,12 +174,12 @@ export function Sidebar({ currentPage, onPageChange }: SidebarProps) {
           <div className="space-y-4">
             {navigationItems.map((item) => {
               const Icon = item.icon;
-              const isActive = currentPage === item.id;
+              const isActive = pathname === item.path || pathname.startsWith(`${item.path}/`);
               
               return (
                 <div key={item.id} className="relative group">
                   <button
-                    onClick={() => handleNavigationClick(item.id)}
+                    onClick={() => handleNavigationClick(item.path)}
                     className={cn(
                       "transition-all duration-300 flex items-center relative overflow-hidden",
                       "hover:scale-110 hover:shadow-lg",
@@ -177,19 +249,16 @@ export function Sidebar({ currentPage, onPageChange }: SidebarProps) {
         {/* User Profile Section */}
         <div className="p-4 flex justify-center">
           <div className="relative group">
-            <div 
-              className="w-12 h-12 bg-gradient-to-br from-sidebar-primary to-sidebar-primary/80 rounded-full flex items-center justify-center shadow-lg hover:scale-110 transition-all duration-300 cursor-pointer"
-              onClick={() => setIsExpanded(!isExpanded)}
-            >
-              <span className="text-sidebar-primary-foreground font-semibold text-lg">LG</span>
-            </div>
-            
-            {/* Profile tooltip for collapsed state */}
+            <button type="button" onClick={handleProfileClick}
+              className="w-12 h-12 bg-gradient-to-br from-sidebar-primary to-sidebar-primary/80 rounded-full flex items-center justify-center shadow-lg hover:scale-110 transition-all duration-300 cursor-pointer border border-sidebar-primary/40">
+              <span className="text-sidebar-primary-foreground font-semibold text-sm">
+                {initials}
+              </span>
+            </button>
+
             {!isExpanded && (
               <div className="absolute left-full ml-4 px-3 py-2 bg-gradient-to-br from-sidebar-primary to-sidebar-primary/90 text-sidebar-primary-foreground rounded-xl opacity-0 group-hover:opacity-100 transition-all duration-300 pointer-events-none whitespace-nowrap z-50 shadow-lg transform translate-x-2 group-hover:translate-x-0">
-                <div className="font-medium text-sm">Liam Gallagher</div>
-                <div className="text-xs opacity-75 mt-1">System Administrator</div>
-                {/* Tooltip arrow */}
+               
                 <div className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1 w-2 h-2 bg-sidebar-primary rotate-45" />
               </div>
             )}
@@ -198,14 +267,27 @@ export function Sidebar({ currentPage, onPageChange }: SidebarProps) {
             {isExpanded && (
               <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 text-center">
                 <div className="text-sidebar-foreground font-medium text-sm whitespace-nowrap">
-                  Liam Gallagher
+                  {displayName}
                 </div>
                 <div className="text-sidebar-foreground/70 text-xs whitespace-nowrap">
-                  System Administrator
+                  {userEmail || "프로필로 이동"}
                 </div>
               </div>
             )}
+            
           </div>
+        </div>
+
+        {/* Logout */}
+        <div className="p-4 flex justify-center">
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="w-12 h-12 bg-sidebar-accent rounded-full flex items-center justify-center shadow-lg hover:scale-110 transition-all duration-300 cursor-pointer border border-sidebar-border/40"
+            aria-label="로그아웃"
+          >
+            <LogOut className="w-5 h-5 text-sidebar-foreground" />
+          </button>
         </div>
       </div>
     </div>

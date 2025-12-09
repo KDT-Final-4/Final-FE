@@ -1,9 +1,9 @@
 import { useState } from "react";
-import { Card, CardContent } from "./ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
-import { Button } from "./ui/button";
-import { Checkbox } from "./ui/checkbox";
-import { Badge } from "./ui/badge";
+import { Card, CardContent } from "../../components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
+import { Button } from "../../components/ui/button";
+import { Checkbox } from "../../components/ui/checkbox";
+import { Badge } from "../../components/ui/badge";
 import { Filter, Search } from "lucide-react";
 
 interface Device {

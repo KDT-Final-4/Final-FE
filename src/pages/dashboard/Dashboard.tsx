@@ -5,6 +5,11 @@ import { DemandChart } from "../../components/DemandChart";
 import { EnergyParameters } from "../../components/EnergyParameters";
 import { EnhancedFilterSection } from "../trend/EnhancedFilterSection";
 
+type DateRange = {
+  start: string;
+  end: string;
+};
+
 type UserMeResponse = {
   userId?: number;
   email?: string;
@@ -26,12 +31,49 @@ type ContentsCountResponse = {
   contentsCount?: number;
 };
 
+const formatDate = (date: Date) => {
+  const year = date.getFullYear();
+  const month = `${date.getMonth() + 1}`.padStart(2, "0");
+  const day = `${date.getDate()}`.padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+const getDateRangeFromPeriod = (period: string): DateRange => {
+  const today = new Date();
+
+  switch (period) {
+    case "today": {
+      const formatted = formatDate(today);
+      return { start: formatted, end: formatted };
+    }
+    case "yesterday": {
+      const target = new Date(today);
+      target.setDate(today.getDate() - 1);
+      const formatted = formatDate(target);
+      return { start: formatted, end: formatted };
+    }
+    case "last-7-days": {
+      const start = new Date(today);
+      start.setDate(today.getDate() - 6);
+      return { start: formatDate(start), end: formatDate(today) };
+    }
+    case "last-30-days": {
+      const start = new Date(today);
+      start.setDate(today.getDate() - 29);
+      return { start: formatDate(start), end: formatDate(today) };
+    }
+    default:
+      return { start: "", end: "" };
+  }
+};
+
 export function Dashboard() {
   const [selectedFilterType, setSelectedFilterType] = useState<"device" | "virtual-group">("device");
   const [selectedDevice, setSelectedDevice] = useState("device-1");
   const [selectedDevices, setSelectedDevices] = useState<string[]>([]);
   const [dataMode, setDataMode] = useState("real-time");
-  const [selectedDay, setSelectedDay] = useState("today");
+  const [selectedDay, setSelectedDay] = useState("last-7-days");
+  const [dateRange, setDateRange] = useState<DateRange>(() => getDateRangeFromPeriod("last-7-days"));
   const [userName, setUserName] = useState("");
   const [dashboardStatus, setDashboardStatus] = useState<DashboardStatusResponse | null>(null);
   const [contentsCount, setContentsCount] = useState<number | null>(null);
@@ -143,6 +185,8 @@ export function Dashboard() {
       devices: selectedDevices,
       dataMode,
       selectedDay,
+      start: dateRange.start,
+      end: dateRange.end,
     });
   };
 
@@ -155,6 +199,34 @@ export function Dashboard() {
       setSelectedDevice("group-production");
       setSelectedDevices([]);
     }
+  };
+
+  const handleDayChange = (day: string) => {
+    setSelectedDay(day);
+    if (day !== "custom") {
+      setDateRange(getDateRangeFromPeriod(day));
+    }
+  };
+
+  const handleDateRangeChange = (range: DateRange) => {
+    if (range.start && range.end) {
+      const startDate = new Date(range.start);
+      const endDate = new Date(range.end);
+
+      if (startDate > endDate) {
+        console.warn("[Dashboard] start date is after end date, ignoring update");
+        return;
+      }
+
+      const diffDays = Math.floor((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+      if (diffDays > 30) {
+        console.warn("[Dashboard] date range exceeds 30 days, ignoring update");
+        return;
+      }
+    }
+
+    setSelectedDay("custom");
+    setDateRange(range);
   };
 
   return (
@@ -185,11 +257,13 @@ export function Dashboard() {
           selectedDevices={selectedDevices}
           dataMode={dataMode}
           selectedDay={selectedDay}
+          dateRange={dateRange}
           onFilterTypeChange={handleFilterTypeChange}
           onDeviceChange={setSelectedDevice}
           onDevicesChange={setSelectedDevices}
           onDataModeChange={setDataMode}
-          onDayChange={setSelectedDay}
+          onDayChange={handleDayChange}
+          onDateRangeChange={handleDateRangeChange}
           onApplyFilters={handleApplyFilters}
         />
 
@@ -209,8 +283,13 @@ export function Dashboard() {
             selectedDevice={selectedFilterType === "device" ? selectedDevice : selectedDevices.join(",")} 
           />
           
-          {/* Max vs Actual Demand */}
-          <DemandChart dataMode={dataMode} selectedDay={selectedDay} />
+          {/* Daily clicks */}
+          <DemandChart 
+            dataMode={dataMode} 
+            selectedDay={selectedDay} 
+            dateRange={dateRange} 
+            onDateRangeChange={handleDateRangeChange}
+          />
         </div>
       </div>
     </div>

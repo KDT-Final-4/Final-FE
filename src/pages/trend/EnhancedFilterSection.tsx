@@ -4,7 +4,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { Button } from "../../components/ui/button";
 import { Checkbox } from "../../components/ui/checkbox";
 import { Badge } from "../../components/ui/badge";
-import { Filter, Search } from "lucide-react";
+import { Input } from "../../components/ui/input";
+import { Filter } from "lucide-react";
 
 interface Device {
   id: string;
@@ -19,11 +20,13 @@ interface EnhancedFilterSectionProps {
   selectedDevices: string[];
   dataMode: string;
   selectedDay: string;
+  dateRange: { start: string; end: string };
   onFilterTypeChange: (type: "device" | "virtual-group") => void;
   onDeviceChange: (deviceId: string) => void;
   onDevicesChange: (deviceIds: string[]) => void;
   onDataModeChange: (mode: string) => void;
   onDayChange: (day: string) => void;
+  onDateRangeChange: (range: { start: string; end: string }) => void;
   onApplyFilters: () => void;
 }
 
@@ -33,11 +36,13 @@ export function EnhancedFilterSection({
   selectedDevices,
   dataMode,
   selectedDay,
+  dateRange,
   onFilterTypeChange,
   onDeviceChange,
   onDevicesChange,
   onDataModeChange,
   onDayChange,
+  onDateRangeChange,
   onApplyFilters,
 }: EnhancedFilterSectionProps) {
   const [isVirtualGroupDropdownOpen, setIsVirtualGroupDropdownOpen] = useState(false);
@@ -79,6 +84,7 @@ export function EnhancedFilterSection({
     { id: "yesterday", name: "Yesterday" },
     { id: "last-7-days", name: "Last 7 Days" },
     { id: "last-30-days", name: "Last 30 Days" },
+    { id: "custom", name: "Custom Range" },
   ];
 
   const handleVirtualGroupDeviceToggle = (deviceId: string) => {
@@ -253,6 +259,29 @@ export function EnhancedFilterSection({
                 ))}
               </SelectContent>
             </Select>
+            {selectedDay === "custom" && (
+              <>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <label className="text-xs text-muted-foreground">Start</label>
+                    <Input
+                      type="date"
+                      value={dateRange.start}
+                      onChange={(event) => onDateRangeChange({ ...dateRange, start: event.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-muted-foreground">End</label>
+                    <Input
+                      type="date"
+                      value={dateRange.end}
+                      onChange={(event) => onDateRangeChange({ ...dateRange, end: event.target.value })}
+                    />
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground">Up to 30 days per request.</p>
+              </>
+            )}
           </div>
 
           {/* Filter Button */}

@@ -1,7 +1,6 @@
 # Dashboard API 연동 가이드
 
 ## 공통
-- 프론트가 보내야 하는 값: `Authorization: Bearer {JWT}` (필수)
 - Base URL: `/api/dashboard`
 - 응답: `application/json`, 성공 시 200
 - 날짜 포맷: `YYYY-MM-DD` (ISO), `LocalDateTime`은 ISO 문자열

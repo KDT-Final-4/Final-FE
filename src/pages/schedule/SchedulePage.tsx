@@ -27,7 +27,20 @@ type ScheduleForm = {
   repeatInterval: string;
 };
 
-const REPEAT_INTERVALS = ["DAILY", "WEEKLY", "MONTHLY", "ONCE"];
+const REPEAT_INTERVALS = ["DAILY", "WEEKLY", "MONTHLY", "YEARLY", "ONCE"] as const;
+
+const REPEAT_LABELS: Record<string, string> = {
+  DAILY: "매일",
+  WEEKLY: "매주",
+  MONTHLY: "매월",
+  YEARLY: "매년",
+  ONCE: "한 번",
+};
+
+const getRepeatLabel = (value?: string) => {
+  if (!value) return "-";
+  return REPEAT_LABELS[value] ?? value;
+};
 
 const formatDateTime = (value?: string | null) => {
   if (!value) return "-";
@@ -63,7 +76,7 @@ export function SchedulePage() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [togglingId, setTogglingId] = useState<number | null>(null);
+  const [isToggling, setIsToggling] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isListLoading, setIsListLoading] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
@@ -103,7 +116,7 @@ export function SchedulePage() {
         throw new Error(`스케줄을 불러오지 못했습니다. (HTTP ${response.status})`);
       }
       const data: ScheduleResponse = await response.json();
-      const normalizedRepeat = REPEAT_INTERVALS.includes(data.repeatInterval)
+      const normalizedRepeat = REPEAT_INTERVALS.includes(data.repeatInterval as typeof REPEAT_INTERVALS[number])
         ? data.repeatInterval
         : REPEAT_INTERVALS[0];
       setSchedule(data);
@@ -171,7 +184,9 @@ export function SchedulePage() {
       setCreateForm({
         title: "",
         startTime: "",
-        repeatInterval: REPEAT_INTERVALS.includes(data.repeatInterval) ? data.repeatInterval : REPEAT_INTERVALS[0],
+          repeatInterval: REPEAT_INTERVALS.includes(data.repeatInterval as typeof REPEAT_INTERVALS[number])
+            ? data.repeatInterval
+            : REPEAT_INTERVALS[0],
       });
       setIsCreateOpen(false);
       await loadScheduleList();
@@ -222,7 +237,7 @@ export function SchedulePage() {
         throw new Error(`스케줄 저장에 실패했습니다. (HTTP ${response.status})`);
       }
       const data: ScheduleResponse = await response.json();
-      const normalizedRepeat = REPEAT_INTERVALS.includes(data.repeatInterval)
+      const normalizedRepeat = REPEAT_INTERVALS.includes(data.repeatInterval as typeof REPEAT_INTERVALS[number])
         ? data.repeatInterval
         : form.repeatInterval;
       setSchedule(data);
@@ -242,12 +257,12 @@ export function SchedulePage() {
     }
   };
 
-  const toggleActive = async (id: number) => {
+  const toggleActive = async (id?: number | null) => {
     if (!id) {
       setError("먼저 스케줄을 불러와 주세요.");
       return;
     }
-    setTogglingId(id);
+    setIsToggling(true);
     setError(null);
     setMessage(null);
     try {
@@ -264,7 +279,7 @@ export function SchedulePage() {
       const message = err instanceof Error ? err.message : "스케줄 상태 변경에 실패했습니다.";
       setError(message);
     } finally {
-      setTogglingId(null);
+      setIsToggling(false);
     }
   };
 
@@ -304,7 +319,7 @@ export function SchedulePage() {
       <div className="flex flex-col gap-2">
         <h1 className="text-3xl font-semibold text-foreground">스케줄</h1>
         <p className="text-muted-foreground">
-          API에서 스케줄을 불러와 수정하고 활성 상태를 관리하세요.
+          컨텐츠 자동 배포를 위한 스케줄을 관리하세요.
         </p>
       </div>
 
@@ -322,30 +337,28 @@ export function SchedulePage() {
       <div className="space-y-6">
         <Card className="lg:col-span-3">
           <CardHeader>
-            <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="flex flex-wrap justify-between gap-4">
               <div className="space-y-1">
                 <CardTitle className="text-xl">스케줄 목록</CardTitle>
-                <CardDescription>/api/schedule 결과를 표로 표시합니다.</CardDescription>
+                <CardDescription>스케줄을 수정하시려면 목록을 클릭해주세요. </CardDescription>
               </div>
-              <div className="flex flex-wrap gap-2 sm:justify-end sm:self-start">
+              <div className="flex items-center gap-3">
                 <Button variant="outline" onClick={loadScheduleList} disabled={isListLoading}>
                   {isListLoading ? "새로고침..." : "목록 새로고침"}
                 </Button>
-                <Button
-                  onClick={() => {
-                    if (isCreateOpen) {
-                      setIsCreateOpen(false);
-                      return;
-                    }
-                    // 생성 폼을 열 때 선택된 스케줄/수정 모드를 모두 해제해 상세 카드가 닫히도록 처리
-                    setSchedule(null);
-                    setActiveScheduleId(null);
-                    setIsEditing(false);
-                    setIsCreateOpen(true);
-                  }}
-                >
-                  {isCreateOpen ? "생성 폼 닫기" : "+ 새 스케줄 생성"}
-                </Button>
+                {!isCreateOpen && (
+                  <Button
+                    onClick={() => {
+                      // 생성 폼을 열 때 선택된 스케줄/수정 모드를 모두 해제해 상세 카드가 닫히도록 처리
+                      setSchedule(null);
+                      setActiveScheduleId(null);
+                      setIsEditing(false);
+                      setIsCreateOpen(true);
+                    }}
+                  >
+                    + 새 스케줄 생성
+                  </Button>
+                )}
               </div>
             </div>
           </CardHeader>
@@ -365,7 +378,7 @@ export function SchedulePage() {
                 <TableBody>
                   {scheduleList.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center text-sm text-muted-foreground">
+                      <TableCell colSpan={6} className="text-center text-sm text-muted-foreground">
                         {isListLoading ? "불러오는 중..." : "등록된 스케줄이 없습니다."}
                       </TableCell>
                     </TableRow>
@@ -383,21 +396,13 @@ export function SchedulePage() {
                             >
                           <TableCell className="font-medium">{item.id}</TableCell>
                           <TableCell>{item.title}</TableCell>
-                          <TableCell>{item.repeatInterval}</TableCell>
+                          <TableCell>{getRepeatLabel(item.repeatInterval)}</TableCell>
                           <TableCell>{formatDateTime(item.startTime)}</TableCell>
                           <TableCell>{formatDateTime(item.lastExecutedAt)}</TableCell>
                           <TableCell>
-                            <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                              <Switch
-                                checked={item.isActive}
-                                onCheckedChange={() => toggleActive(item.id)}
-                                disabled={togglingId === item.id}
-                                aria-label="스케줄 활성/비활성 토글"
-                              />
-                              <Badge variant={item.isActive ? "default" : "secondary"}>
-                                {item.isActive ? "ON" : "OFF"}
-                              </Badge>
-                            </div>
+                            <Badge variant={item.isActive ? "default" : "secondary"}>
+                              {item.isActive ? "활성" : "비활성"}
+                            </Badge>
                           </TableCell>
                         </TableRow>
                       );
@@ -444,7 +449,7 @@ export function SchedulePage() {
                         <SelectContent>
                           {REPEAT_INTERVALS.map((option) => (
                             <SelectItem key={option} value={option}>
-                              {option}
+                              {getRepeatLabel(option)}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -491,7 +496,7 @@ export function SchedulePage() {
         {schedule && (
           <Card className="lg:col-span-3" ref={editSectionRef}>
             <CardHeader className="space-y-3">
-              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex flex-wrap justify-between gap-4">
                 <div className="flex flex-col gap-2">
                   <div className="flex flex-wrap items-center gap-2">
                     <Badge variant={schedule.isActive ? "default" : "secondary"}>
@@ -502,32 +507,33 @@ export function SchedulePage() {
                   <CardTitle className="text-xl">스케줄 정보 · 수정</CardTitle>
                   <CardDescription>선택한 스케줄의 상태와 수정 영역을 한눈에 확인하세요.</CardDescription>
                 </div>
+                <div className="flex items-center gap-3">
+                  <Switch
+                    id={`schedule-${schedule.id}-active-toggle`}
+                    checked={schedule.isActive}
+                    disabled={isToggling || isLoading}
+                    onCheckedChange={(checked) => {
+                      if (checked === schedule.isActive) return;
+                      toggleActive(schedule.id);
+                    }}
+                    aria-label="스케줄 활성화 전환"
+                  />
+                  <Label htmlFor={`schedule-${schedule.id}-active-toggle`} className="text-sm cursor-pointer">
+                    {isToggling ? "변경 중..." : schedule.isActive ? "활성화됨" : "비활성화됨"}
+                  </Label>
+                </div>
               </div>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-                <InfoTile label="반복 주기" value={schedule.repeatInterval} />
+                <InfoTile label="반복 주기" value={getRepeatLabel(schedule.repeatInterval)} />
                 <InfoTile label="시작 시간" value={formatDateTime(schedule.startTime)} highlight />
                 <InfoTile label="최근 실행 시각" value={formatDateTime(schedule.lastExecutedAt)} />
               </div>
 
               <Separator />
 
-              <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-semibold text-foreground">상세 기록</h3>
-                    <Badge variant="outline">읽기</Badge>
-                  </div>
-                  <div className="space-y-3 rounded-lg border bg-muted/30 p-4">
-                    <InfoRow label="반복" value={schedule.repeatInterval} />
-                    <InfoRow label="시작 시간" value={formatDateTime(schedule.startTime)} />
-                    <InfoRow label="최근 실행 시각" value={formatDateTime(schedule.lastExecutedAt)} />
-                    <InfoRow label="생성일" value={formatDateTime(schedule.createdAt)} />
-                    <InfoRow label="업데이트" value={formatDateTime(schedule.updatedAt)} />
-                  </div>
-                </div>
-
+              <div className="grid grid-cols-1 gap-6">
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <div>
@@ -573,6 +579,21 @@ export function SchedulePage() {
                           취소
                         </Button>
                       )}
+                      {isEditing && (
+                        <div className="flex flex-wrap gap-3 pt-2">
+                          <Button onClick={handleSave} disabled={isSaving || isLoading || !activeScheduleId}>
+                            {isSaving ? "저장 중..." : "저장"}
+                          </Button>
+                        </div>
+                      )}
+                       <Button
+                          type="button"
+                          variant="destructive"
+                          onClick={handleDelete}
+                          disabled={isDeleting || isLoading || !activeScheduleId}
+                        >
+                          {isDeleting ? "삭제 중..." : "삭제"}
+                        </Button>
                     </div>
                   </div>
                   <div className="space-y-4 rounded-lg border bg-background p-4 shadow-sm">
@@ -601,7 +622,7 @@ export function SchedulePage() {
                         <SelectContent>
                           {REPEAT_INTERVALS.map((option) => (
                             <SelectItem key={option} value={option}>
-                              {option}
+                              {getRepeatLabel(option)}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -622,22 +643,6 @@ export function SchedulePage() {
                       <p className="text-xs text-muted-foreground">
                         상단의 &quot;수정&quot; 버튼을 눌러 편집 모드로 전환하세요.
                       </p>
-                    )}
-
-                    {isEditing && (
-                      <div className="flex flex-wrap gap-3 pt-2">
-                        <Button onClick={handleSave} disabled={isSaving || isLoading || !activeScheduleId}>
-                          {isSaving ? "저장 중..." : "저장"}
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="destructive"
-                          onClick={handleDelete}
-                          disabled={isDeleting || isLoading || !activeScheduleId}
-                        >
-                          {isDeleting ? "삭제 중..." : "삭제"}
-                        </Button>
-                      </div>
                     )}
                   </div>
                 </div>

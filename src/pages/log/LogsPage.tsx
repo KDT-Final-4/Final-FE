@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Activity, Clock, Filter, RefreshCw, Search } from "lucide-react";
+import { Activity, Clock, RefreshCw, Search } from "lucide-react";
 import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../../components/ui/card";
@@ -25,9 +25,9 @@ type LogCounts = {
 };
 
 const LOGTYPE_BADGE: Record<LogType, string> = {
-  INFO: "bg-primary/10 text-primary border-primary/20",
-  ERROR: "bg-destructive/10 text-destructive border-destructive/20",
-  WARN: "bg-amber-100 text-amber-900 border-amber-200",
+  INFO: "badge-info-soft",
+  WARN: "badge-warn-soft",
+  ERROR: "badge-error-soft",
 };
 
 const formatDateTime = (value: string) => {
@@ -205,10 +205,6 @@ export function LogsPage() {
           <p className="text-muted-foreground">파이프라인/컨텐츠 처리 로그를 조회하고 필터링하세요.</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" className="gap-2" onClick={loadCounts} disabled={isLoadingCounts}>
-            <Filter className="w-4 h-4" />
-            카운트 새로고침
-          </Button>
           <Button variant="outline" className="gap-2" onClick={loadLogs} disabled={isLoading}>
             <RefreshCw className="w-4 h-4" />
             목록 새로고침
@@ -219,11 +215,11 @@ export function LogsPage() {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         {[
           { label: "전체", value: summary.total, tone: "text-foreground" },
-          { label: "INFO", value: summary.info, tone: "text-primary" },
-          { label: "WARN", value: summary.warn, tone: "text-amber-600" },
-          { label: "ERROR", value: summary.error, tone: "text-destructive" },
+          { label: "INFO", value: summary.info, tone: "text-primary", cardClass: "card-info-soft" },
+          { label: "WARN", value: summary.warn, tone: "text-yellow-600", cardClass: "card-warn-soft" },
+          { label: "ERROR", value: summary.error, tone: "text-red-600", cardClass: "card-error-soft" },
         ].map((item) => (
-          <Card key={item.label} className="border-border/80 shadow-sm">
+          <Card key={item.label} className={`border-border/80 shadow-sm ${item.cardClass ?? ""}`}>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm text-muted-foreground">{item.label}</CardTitle>
             </CardHeader>
@@ -326,54 +322,55 @@ export function LogsPage() {
                 <TableHead>타입</TableHead>
                 <TableHead>식별 Id</TableHead>
                 <TableHead>메시지</TableHead>
-                <TableHead className="text-right">작성자 ID</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading && (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center text-muted-foreground">
+                  <TableCell colSpan={4} className="text-center text-muted-foreground">
                     불러오는 중...
                   </TableCell>
                 </TableRow>
               )}
               {!isLoading && filteredLogs.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center text-muted-foreground">
+                  <TableCell colSpan={4} className="text-center text-muted-foreground">
                     표시할 로그가 없습니다.
                   </TableCell>
                 </TableRow>
               )}
               {!isLoading &&
-                filteredLogs.map((log) => (
-                  <TableRow key={log.id}>
-                    <TableCell>{formatDateTime(log.createdAt)}</TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className={LOGTYPE_BADGE[log.logType]}>
-                        {log.logType}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      <div className="flex items-center gap-2">
-                        <span>{log.jobId || "-"}</span>
-                        {log.jobId && (
-                          <Button
-                            variant="link"
-                            size="sm"
-                            className="px-0"
-                            onClick={() => startStream(log.jobId)}
-                          >
-                            스트림
-                          </Button>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell className="max-w-[360px] whitespace-pre-line break-words" title={log.message}>
-                      {log.message}
-                    </TableCell>
-                    <TableCell className="text-right text-muted-foreground">{log.userId}</TableCell>
-                  </TableRow>
-                ))}
+                filteredLogs.map((log) => {
+                  const isClickable = Boolean(log.jobId);
+                  return (
+                    <TableRow
+                      key={log.id}
+                      className={
+                        isClickable
+                          ? "cursor-pointer bg-secondary/20 hover:bg-secondary/30 transition-colors"
+                          : undefined
+                      }
+                      onClick={() => {
+                        if (log.jobId) startStream(log.jobId);
+                      }}
+                    >
+                      <TableCell>{formatDateTime(log.createdAt)}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className={LOGTYPE_BADGE[log.logType]}>
+                          {log.logType}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        <div className="flex items-center gap-2">
+                          <span>{log.jobId || "-"}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="max-w-[360px] whitespace-pre-line break-words" title={log.message}>
+                        {log.message}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
             </TableBody>
             <TableCaption>서버에서 받은 순서대로 정렬됩니다.</TableCaption>
           </Table>
@@ -398,6 +395,8 @@ export function LogsPage() {
             파이프라인 로그 스트림 (SSE)
           </CardTitle>
           <CardDescription>식별 Id 기준으로 DB의 로그를 한번에 스트리밍합니다.</CardDescription>
+            <CardDescription>로그 리스트에서 선택 가능합니다.</CardDescription>
+
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="grid gap-3 md:grid-cols-2">
@@ -439,7 +438,6 @@ export function LogsPage() {
                   </div>
                   <div className="text-xs text-muted-foreground">식별 Id: {log.jobId || "-"}</div>
                   <div className="text-sm whitespace-pre-line break-words">{log.message}</div>
-                  <div className="text-xs text-muted-foreground text-right">userId: {log.userId}</div>
                 </div>
               ))}
             </div>

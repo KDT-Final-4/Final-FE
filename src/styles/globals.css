@@ -30,6 +30,14 @@
   --chart-3: #f59e0b;
   --chart-4: #ef4444;
   --chart-5: #8b5cf6;
+  --info-soft-bg: color-mix(in oklab, var(--primary) 8%, #ffffff);
+  --info-soft-border: color-mix(in oklab, var(--primary) 22%, transparent);
+  --warn-soft-bg: #fff7e6;
+  --warn-soft-foreground: #ca8a04;
+  --warn-soft-border: #fcd34d;
+  --error-soft-bg: #fef2f2;
+  --error-soft-foreground: #dc2626;
+  --error-soft-border: #fecdd3;
   --radius: 0.625rem;
   --sidebar: #2c5f4e;
   --sidebar-foreground: #ffffff;
@@ -68,6 +76,14 @@
   --chart-3: #f59e0b;
   --chart-4: #ef4444;
   --chart-5: #8b5cf6;
+  --info-soft-bg: color-mix(in oklab, var(--primary) 10%, #0f172a);
+  --info-soft-border: color-mix(in oklab, var(--primary) 24%, transparent);
+  --warn-soft-bg: color-mix(in oklab, #fcd34d 18%, #0f172a);
+  --warn-soft-foreground: #facc15;
+  --warn-soft-border: color-mix(in oklab, #facc15 35%, transparent);
+  --error-soft-bg: color-mix(in oklab, #fca5a5 18%, #0f172a);
+  --error-soft-foreground: #f87171;
+  --error-soft-border: color-mix(in oklab, #fca5a5 35%, transparent);
   --sidebar: #2c5f4e;
   --sidebar-foreground: #ffffff;
   --sidebar-primary: #7bdc93;
@@ -207,6 +223,37 @@ html {
 
 .gradient-glow {
   box-shadow: 0 0 20px rgba(123, 220, 147, 0.3), 0 0 40px rgba(123, 220, 147, 0.1);
+}
+
+/* Soft tone helpers for log badges/cards */
+.badge-info-soft {
+  background-color: var(--info-soft-bg);
+  color: var(--primary);
+  border: 1px solid var(--info-soft-border);
+}
+
+.badge-warn-soft {
+  background-color: var(--warn-soft-bg);
+  color: var(--warn-soft-foreground);
+  border: 1px solid var(--warn-soft-border);
+}
+
+.badge-error-soft {
+  background-color: var(--error-soft-bg);
+  color: var(--error-soft-foreground);
+  border: 1px solid var(--error-soft-border);
+}
+
+.card-info-soft {
+  background-color: var(--info-soft-bg);
+}
+
+.card-warn-soft {
+  background-color: var(--warn-soft-bg);
+}
+
+.card-error-soft {
+  background-color: var(--error-soft-bg);
 }
 
 /* Sidebar animations */

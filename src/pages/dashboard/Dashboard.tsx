@@ -182,13 +182,13 @@ export function Dashboard() {
             <div>
               <h1 className="text-2xl font-semibold text-foreground">안녕하세요, {userName || "사용자"}! 👋</h1>
               <p className="text-muted-foreground mt-1">
-                What are you looking for today?
+                오늘 어떤 정보를 보고 싶으신가요?
               </p>
             </div>
             <div className="flex items-center gap-2">
               <Badge className="bg-primary/10 text-primary border-primary/20 px-3 py-1.5">
                 <div className="w-2 h-2 bg-primary rounded-full mr-2 animate-pulse"></div>
-                Real-time monitoring active
+                실시간 모니터링 중
               </Badge>
             </div>
           </div>

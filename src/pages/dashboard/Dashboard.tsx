@@ -3,7 +3,6 @@ import { Badge } from "../../components/ui/badge";
 import { ConsumptionChart } from "../../components/ConsumptionChart";
 import { DemandChart } from "../../components/DemandChart";
 import { EnergyParameters } from "../../components/EnergyParameters";
-import { EnhancedFilterSection } from "../trend/EnhancedFilterSection";
 
 type DateRange = {
   start: string;
@@ -68,11 +67,8 @@ const getDateRangeFromPeriod = (period: string): DateRange => {
 };
 
 export function Dashboard() {
-  const [selectedFilterType, setSelectedFilterType] = useState<"device" | "virtual-group">("device");
-  const [selectedDevice, setSelectedDevice] = useState("device-1");
-  const [selectedDevices, setSelectedDevices] = useState<string[]>([]);
-  const [dataMode, setDataMode] = useState("real-time");
-  const [selectedDay, setSelectedDay] = useState("last-7-days");
+  const selectedDevice = "device-1";
+  const [selectedDay] = useState("last-7-days");
   const [dateRange, setDateRange] = useState<DateRange>(() => getDateRangeFromPeriod("last-7-days"));
   const [userName, setUserName] = useState("");
   const [dashboardStatus, setDashboardStatus] = useState<DashboardStatusResponse | null>(null);
@@ -177,58 +173,6 @@ export function Dashboard() {
     };
   }, []);
 
-  const handleApplyFilters = () => {
-    // In a real application, this would trigger data fetching
-    console.log("Applying filters:", {
-      filterType: selectedFilterType,
-      device: selectedDevice,
-      devices: selectedDevices,
-      dataMode,
-      selectedDay,
-      start: dateRange.start,
-      end: dateRange.end,
-    });
-  };
-
-  const handleFilterTypeChange = (type: "device" | "virtual-group") => {
-    setSelectedFilterType(type);
-    if (type === "device") {
-      setSelectedDevice("device-1");
-      setSelectedDevices([]);
-    } else {
-      setSelectedDevice("group-production");
-      setSelectedDevices([]);
-    }
-  };
-
-  const handleDayChange = (day: string) => {
-    setSelectedDay(day);
-    if (day !== "custom") {
-      setDateRange(getDateRangeFromPeriod(day));
-    }
-  };
-
-  const handleDateRangeChange = (range: DateRange) => {
-    if (range.start && range.end) {
-      const startDate = new Date(range.start);
-      const endDate = new Date(range.end);
-
-      if (startDate > endDate) {
-        console.warn("[Dashboard] start date is after end date, ignoring update");
-        return;
-      }
-
-      const diffDays = Math.floor((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-      if (diffDays > 30) {
-        console.warn("[Dashboard] date range exceeds 30 days, ignoring update");
-        return;
-      }
-    }
-
-    setSelectedDay("custom");
-    setDateRange(range);
-  };
-
   return (
     <div className="min-h-screen" style={{ backgroundColor: '#f8faf9' }}>
       <div className="p-6 space-y-6">
@@ -250,27 +194,8 @@ export function Dashboard() {
           </div>
         </div>
 
-        {/* Enhanced Filter Section */}
-        <EnhancedFilterSection
-          selectedFilterType={selectedFilterType}
-          selectedDevice={selectedDevice}
-          selectedDevices={selectedDevices}
-          dataMode={dataMode}
-          selectedDay={selectedDay}
-          dateRange={dateRange}
-          onFilterTypeChange={handleFilterTypeChange}
-          onDeviceChange={setSelectedDevice}
-          onDevicesChange={setSelectedDevices}
-          onDataModeChange={setDataMode}
-          onDayChange={handleDayChange}
-          onDateRangeChange={handleDateRangeChange}
-          onApplyFilters={handleApplyFilters}
-        />
-
         {/* Energy Parameters */}
         <EnergyParameters 
-          dataMode={dataMode} 
-          selectedDevice={selectedFilterType === "device" ? selectedDevice : selectedDevices.join(",")} 
           totalViews={dashboardStatus?.allClicks}
           contentsCount={contentsCount ?? undefined}
         />
@@ -280,15 +205,14 @@ export function Dashboard() {
           {/* Consumption Overview */}
           <ConsumptionChart 
             selectedDay={selectedDay} 
-            selectedDevice={selectedFilterType === "device" ? selectedDevice : selectedDevices.join(",")} 
+            selectedDevice={selectedDevice} 
           />
           
           {/* Daily clicks */}
           <DemandChart 
-            dataMode={dataMode} 
             selectedDay={selectedDay} 
             dateRange={dateRange} 
-            onDateRangeChange={handleDateRangeChange}
+            onDateRangeChange={setDateRange}
           />
         </div>
       </div>

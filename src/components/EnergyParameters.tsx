@@ -3,13 +3,11 @@ import { Badge } from "./ui/badge";
 import { TrendingUp, TrendingDown, Minus } from "lucide-react";
 
 interface EnergyParametersProps {
-  dataMode: string;
-  selectedDevice: string;
   totalViews?: number;
   contentsCount?: number;
 }
 
-export function EnergyParameters({ dataMode, selectedDevice, totalViews, contentsCount }: EnergyParametersProps) {
+export function EnergyParameters({ totalViews, contentsCount }: EnergyParametersProps) {
   // Mock data - in real app this would come from API
   const parameters = [
     {
@@ -31,26 +29,6 @@ export function EnergyParameters({ dataMode, selectedDevice, totalViews, content
       change: "+0%",
       trend: "stable",
       status: "high",
-    },
-    {
-      id: "kvar",
-      name: "KVAR",
-      fullName: "Reactive Power",
-      value: "342.1",
-      unit: "kVAR",
-      change: "-2.1%",
-      trend: "down",
-      status: "normal",
-    },
-    {
-      id: "pf",
-      name: "PF",
-      fullName: "Power Factor",
-      value: "0.92",
-      unit: "",
-      change: "0.0%",
-      trend: "stable",
-      status: "optimal",
     },
   ];
 
@@ -88,7 +66,7 @@ export function EnergyParameters({ dataMode, selectedDevice, totalViews, content
   };
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-4">
       {parameters.map((param) => (
         <Card key={param.id} className="border-sidebar-border/30 shadow-lg hover:shadow-xl transition-all duration-300 bg-gradient-to-br from-sidebar via-sidebar to-sidebar-accent backdrop-blur-sm hover:scale-[1.02] transform">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">

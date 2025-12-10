@@ -5,7 +5,6 @@ import { Input } from "./ui/input";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from "recharts";
 
 interface DemandChartProps {
-  dataMode: string;
   selectedDay: string;
   dateRange: { start: string; end: string };
   onDateRangeChange: (range: { start: string; end: string }) => void;
@@ -60,17 +59,13 @@ const buildDailySeries = (start: string, end: string, data: DailyClickPoint[]): 
   return days;
 };
 
-export function DemandChart({ dataMode, selectedDay, dateRange, onDateRangeChange }: DemandChartProps) {
+export function DemandChart({ selectedDay, dateRange, onDateRangeChange }: DemandChartProps) {
   const [dailyClicks, setDailyClicks] = useState<DailyClickPoint[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [rangeOpen, setRangeOpen] = useState(false);
   const [rangeDraft, setRangeDraft] = useState(dateRange);
   const [rangeError, setRangeError] = useState<string | null>(null);
-  const [goalOpen, setGoalOpen] = useState(false);
-  const [goalDraft, setGoalDraft] = useState<string>("");
-  const [goalError, setGoalError] = useState<string | null>(null);
-  const [goal, setGoal] = useState<number | null>(null);
 
   useEffect(() => {
     setRangeDraft(dateRange);
@@ -130,7 +125,7 @@ export function DemandChart({ dataMode, selectedDay, dateRange, onDateRangeChang
     fetchDailyClicks();
 
     return () => controller.abort();
-  }, [dataMode, dateRange.end, dateRange.start, selectedDay]);
+  }, [dateRange.end, dateRange.start, selectedDay]);
 
   const chartData = useMemo(
     () => buildDailySeries(dateRange.start, dateRange.end, dailyClicks),
@@ -144,8 +139,7 @@ export function DemandChart({ dataMode, selectedDay, dateRange, onDateRangeChang
     { time: "-", clicks: 0 }
   );
   const yMax = chartData.reduce((max, item) => Math.max(max, item.clicks), 0);
-  const yDomainMaxBase = Math.max(yMax, goal ?? 0);
-  const yDomainMax = yDomainMaxBase ? Math.ceil(yDomainMaxBase * 1.1) : 10;
+  const yDomainMax = yMax ? Math.ceil(yMax * 1.1) : 10;
 
   const validateAndApplyRange = () => {
     const { start, end } = rangeDraft;
@@ -238,14 +232,6 @@ export function DemandChart({ dataMode, selectedDay, dateRange, onDateRangeChang
             />
             <Tooltip content={<CustomTooltip />} />
             <Legend />
-            {goal !== null && (
-              <ReferenceLine
-                y={goal}
-                stroke="#ef4444"
-                strokeDasharray="6 4"
-                label={{ value: `Goal (${goal})`, position: "right", fill: "#ef4444", fontSize: 12 }}
-              />
-            )}
             <Line
               type="monotone"
               dataKey="clicks"
@@ -268,7 +254,7 @@ export function DemandChart({ dataMode, selectedDay, dateRange, onDateRangeChang
           <div>
             <CardTitle className="text-lg font-semibold text-card-foreground">Daily Clicks</CardTitle>
             <p className="text-sm text-muted-foreground">
-              Click volume over time ({dataMode}) — {dateRange.start || "-"} to {dateRange.end || "-"}
+              Click volume over time — {dateRange.start || "-"} to {dateRange.end || "-"}
             </p>
           </div>
           <div className="flex flex-col items-end gap-2">
@@ -279,14 +265,6 @@ export function DemandChart({ dataMode, selectedDay, dateRange, onDateRangeChang
               className="shrink-0"
             >
               {rangeOpen ? "Close" : "Set Range"}
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setGoalOpen((open) => !open)}
-              className="shrink-0"
-            >
-              {goalOpen ? "Close Goal" : "Set Goal"}
             </Button>
           </div>
         </div>
@@ -318,43 +296,6 @@ export function DemandChart({ dataMode, selectedDay, dateRange, onDateRangeChang
             </div>
             {rangeError && <p className="text-xs text-destructive">{rangeError}</p>}
             <p className="text-xs text-muted-foreground">Up to 30 days per request.</p>
-          </div>
-        )}
-
-        {goalOpen && (
-          <div className="space-y-2">
-            <div className="grid grid-cols-1 gap-2 md:grid-cols-[1fr_auto] md:items-end">
-              <div className="space-y-1">
-                <label className="text-xs text-muted-foreground">Goal (clicks)</label>
-                <Input
-                  type="number"
-                  min="0"
-                  value={goalDraft}
-                  onChange={(event) => setGoalDraft(event.target.value)}
-                  placeholder="e.g. 10"
-                />
-              </div>
-              <div className="flex gap-2 md:justify-end">
-                <Button
-                  size="sm"
-                  onClick={() => {
-                    const parsed = Number(goalDraft);
-                    if (!Number.isFinite(parsed) || parsed < 0) {
-                      setGoalError("Enter a valid non-negative number.");
-                      return;
-                    }
-                    setGoalError(null);
-                    setGoal(parsed);
-                    setGoalOpen(false);
-                  }}
-                  className="w-full md:w-auto"
-                >
-                  Apply Goal
-                </Button>
-              </div>
-            </div>
-            {goalError && <p className="text-xs text-destructive">{goalError}</p>}
-            <p className="text-xs text-muted-foreground">Goal line will appear as a red dashed line.</p>
           </div>
         )}
       </CardHeader>

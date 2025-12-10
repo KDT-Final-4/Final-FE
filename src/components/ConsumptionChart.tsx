@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from "recharts";
-import { Button } from "./ui/button";
+import { MousePointerClick } from "lucide-react";
 
 interface ConsumptionChartProps {
   selectedDay: string;
@@ -159,18 +159,22 @@ export function ConsumptionChart({ selectedDay, selectedDevice }: ConsumptionCha
           <h4 className="text-sm font-medium">Contents</h4>
           <div className="grid grid-cols-1 gap-2">
             {contents.slice(0, 3).map((content, index) => (
-              <div key={content.contentId ?? index} className="flex items-center justify-between p-2 bg-muted/50 rounded-md">
+              <a
+                key={content.contentId ?? index}
+                href={content.contentLink}
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center justify-between p-2 bg-muted/50 rounded-md cursor-pointer hover:bg-muted transition-colors"
+              >
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 rounded-full" style={{ backgroundColor: palette[index % palette.length] }} />
                   <span className="text-sm">{`${content.title} - ${content.keyword}`}</span>
                 </div>
-                <div className="flex items-center gap-3">
-                  <Button asChild variant="outline" size="sm">
-                    <a href={content.contentLink} target="_blank" rel="noreferrer">열기</a>
-                  </Button>
-                  <span className="text-sm font-medium">{content.clickCount.toLocaleString()} clicks</span>
-                </div>
-              </div>
+                <span className="flex items-center gap-1 text-sm font-medium text-foreground">
+                  <MousePointerClick className="w-4 h-4 text-primary" aria-hidden />
+                  {content.clickCount.toLocaleString()} clicks
+                </span>
+              </a>
             ))}
           </div>
         </div>

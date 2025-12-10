@@ -16,7 +16,6 @@ interface LoginPageProps {
   onLogin: () => void;
 }
 
-
 export function LoginPage({ onLogin }: LoginPageProps) {
   const [authMode, setAuthMode] = useState<"login" | "register">("login");
   const [email, setEmail] = useState("");
@@ -27,6 +26,26 @@ export function LoginPage({ onLogin }: LoginPageProps) {
   const [info, setInfo] = useState<string | null>(null);
 
   const isRegistering = authMode === "register";
+
+  const extractDetailMessage = async (response: Response) => {
+    try {
+      const body = await response.clone().json();
+      const detail =
+        typeof body?.detail === "string"
+          ? body.detail
+          : typeof body?.message === "string"
+          ? body.message
+          : typeof body?.error === "string"
+          ? body.error
+          : undefined;
+      const title =
+        typeof body?.title === "string" ? body.title : response.statusText;
+      const fallback = response.statusText || "요청 실패";
+      return detail || title || fallback;
+    } catch {
+      return response.statusText || "요청 실패";
+    }
+  };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -43,7 +62,10 @@ export function LoginPage({ onLogin }: LoginPageProps) {
         });
 
         if (!response.ok) {
-          throw new Error("회원가입에 실패했습니다. 입력 정보를 확인해주세요.");
+          const message =
+            (await extractDetailMessage(response)) ||
+            "회원가입에 실패했습니다. 입력 정보를 확인해주세요.";
+          throw new Error(message);
         }
 
         setInfo("회원가입이 완료되었습니다. 로그인해 주세요.");
@@ -58,7 +80,10 @@ export function LoginPage({ onLogin }: LoginPageProps) {
       });
 
       if (!response.ok) {
-        throw new Error("로그인에 실패했습니다. 다시 시도해주세요.");
+        const message =
+          (await extractDetailMessage(response)) ||
+          "로그인에 실패했습니다. 다시 시도해주세요.";
+        throw new Error(message);
       }
 
       await response.json();
@@ -144,6 +169,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
                     id="email"
                     type="email"
                     required
+                    autoComplete="email"
                     placeholder="name@company.com"
                     className="pl-10"
                     value={email}
@@ -159,6 +185,9 @@ export function LoginPage({ onLogin }: LoginPageProps) {
                     id="password"
                     type="password"
                     required
+                    autoComplete={
+                      isRegistering ? "new-password" : "current-password"
+                    }
                     placeholder="••••••••"
                     className="pl-10"
                     value={password}

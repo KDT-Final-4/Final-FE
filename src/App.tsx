@@ -3,11 +3,12 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { Layout } from "./components/Layout";
 import { Dashboard } from "./pages/dashboard/Dashboard";
 import { Trend } from "./pages/trend/Trend";
-import { LoginPage } from "./pages/LoginPage";
-import { ConfigurationPage } from "./pages/Configuration";
-import { LogsPage } from "./pages/Logs";
-import { ReportsPage } from "./pages/Reports";
-import { ProfilePage } from "./pages/Profile";
+import { LoginPage } from "./pages/users/LoginPage";
+import { ProfilePage } from "./pages/users/Profile";
+import { ConfigurationPage } from "./pages/configuration/Configuration";
+import { LogsPage } from "./pages/log/LogsPage";
+import { ReportsPage } from "./pages/report/Reports";
+import { SchedulePage } from "./pages/schedule/SchedulePage"
 
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
@@ -34,6 +35,7 @@ export default function App() {
           <Route path="configuration" element={<ConfigurationPage />} />
           <Route path="logs" element={<LogsPage />} />
           <Route path="reports" element={<ReportsPage />} />
+          <Route path="schedule" element={<SchedulePage />} />
           <Route path="profile" element={<ProfilePage />} />
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Route>

@@ -319,7 +319,7 @@ export function ConfigurationPage() {
         <TabsContent value="llm" className="pt-4">
           <div className="mb-6 grid gap-4 md:grid-cols-2">
             {/* Model */}
-          <Card>
+          <Card className="border-l-4 border-l-green-500">
             <CardHeader>
                <CardTitle>Model 설정</CardTitle>
                <CardDescription>LLM 모델을 설정합니다.</CardDescription>

@@ -1816,6 +1816,13 @@
     outline-width: 1px;
   }
 
+  .outline-input {
+    /* outline-style: var(--tw-outline-style); */
+    outline: 3px solid #e5e7eb;
+    outline-width: 1px;
+    border-radius: 8px;
+  }
+
   .filter {
     filter: var(--tw-blur, ) var(--tw-brightness, ) var(--tw-contrast, ) var(--tw-grayscale, ) var(--tw-hue-rotate, ) var(--tw-invert, ) var(--tw-saturate, ) var(--tw-sepia, ) var(--tw-drop-shadow, );
   }

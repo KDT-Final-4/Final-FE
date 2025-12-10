@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Activity, Clock, RefreshCw, Search } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Activity, Clock, RefreshCw } from "lucide-react";
 import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../../components/ui/card";
 import { Input } from "../../components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
-import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from "../../components/ui/table";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../components/ui/table";
 import { KpiCard } from "../../components/KpiCard";
 
 type LogType = "INFO" | "ERROR" | "WARN";
@@ -31,6 +31,172 @@ const LOGTYPE_BADGE: Record<LogType, string> = {
   ERROR: "badge-error-soft",
 };
 
+const DEFAULT_PAGE = 0;
+const DEFAULT_PAGE_SIZE = 10;
+const PAGE_SIZE_OPTIONS = [10, 20, 30];
+const PAGE_GROUP_SIZE = 10;
+
+const TOTAL_COUNT_KEY_CANDIDATES = [
+  "totalcount",
+  "totalelements",
+  "totalrecords",
+  "total",
+  "count",
+  "totalcnt",
+  "countall",
+  "totalitems",
+  "recordstotal",
+  "recordsfiltered",
+];
+
+const TOTAL_PAGES_KEY_CANDIDATES = [
+  "totalpages",
+  "pages",
+  "pagecount",
+  "pagetotal",
+  "totalpagecount",
+];
+
+const NESTED_CONTAINER_KEYS = [
+  "data",
+  "meta",
+  "metadata",
+  "page",
+  "pageinfo",
+  "pagination",
+  "pageable",
+  "info",
+  "result",
+  "response",
+  "body",
+];
+
+const HEADER_TOTAL_COUNT_KEYS = [
+  "X-Total-Count",
+  "X-Total",
+  "X-Total-Records",
+  "X-TotalRecords",
+  "X-Total-Elements",
+  "X-TotalElements",
+  "X-Total-Count-All",
+];
+
+const HEADER_TOTAL_PAGE_KEYS = [
+  "X-Total-Pages",
+  "X-TotalPages",
+  "X-Page-Count",
+  "X-PageCount",
+];
+
+const normalizeKey = (key: string) => key.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+const parseNumericValue = (value: unknown): number | undefined => {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === "string") {
+    const parsed = Number(value.trim());
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+  return undefined;
+};
+
+const extractTotalCount = (payload: unknown): number | undefined => {
+  if (!payload || typeof payload !== "object") return undefined;
+  const queue: unknown[] = [payload];
+
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (!current || typeof current !== "object" || Array.isArray(current)) {
+      continue;
+    }
+
+    const record = current as Record<string, unknown>;
+    for (const key of Object.keys(record)) {
+      const normalizedKey = normalizeKey(key);
+      if (TOTAL_COUNT_KEY_CANDIDATES.includes(normalizedKey)) {
+        const parsed = parseNumericValue(record[key]);
+        if (typeof parsed === "number") {
+          return parsed;
+        }
+      }
+    }
+
+    for (const key of Object.keys(record)) {
+      const normalizedKey = normalizeKey(key);
+      if (NESTED_CONTAINER_KEYS.includes(normalizedKey)) {
+        const value = record[key];
+        if (value && typeof value === "object") {
+          queue.push(value);
+        }
+      }
+    }
+  }
+
+  return undefined;
+};
+
+const extractTotalPages = (payload: unknown): number | undefined => {
+  if (!payload || typeof payload !== "object") return undefined;
+  const queue: unknown[] = [payload];
+
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (!current || typeof current !== "object" || Array.isArray(current)) {
+      continue;
+    }
+
+    const record = current as Record<string, unknown>;
+    for (const key of Object.keys(record)) {
+      const normalizedKey = normalizeKey(key);
+      if (TOTAL_PAGES_KEY_CANDIDATES.includes(normalizedKey)) {
+        const parsed = parseNumericValue(record[key]);
+        if (typeof parsed === "number") {
+          return parsed;
+        }
+      }
+    }
+
+    for (const key of Object.keys(record)) {
+      const normalizedKey = normalizeKey(key);
+      if (NESTED_CONTAINER_KEYS.includes(normalizedKey)) {
+        const value = record[key];
+        if (value && typeof value === "object") {
+          queue.push(value);
+        }
+      }
+    }
+  }
+
+  return undefined;
+};
+
+const extractLogItems = (payload: unknown): LogItem[] => {
+  if (!payload) return [];
+  if (Array.isArray(payload)) return payload as LogItem[];
+  if (typeof payload === "object") {
+    const dataPayload = payload as Record<string, unknown>;
+    if (Array.isArray(dataPayload.items)) {
+      return dataPayload.items as LogItem[];
+    }
+    if (Array.isArray(dataPayload.content)) {
+      return dataPayload.content as LogItem[];
+    }
+    if (dataPayload.data && typeof dataPayload.data === "object") {
+      const nested = dataPayload.data as Record<string, unknown>;
+      if (Array.isArray(nested.items)) {
+        return nested.items as LogItem[];
+      }
+      if (Array.isArray(nested.content)) {
+        return nested.content as LogItem[];
+      }
+    }
+  }
+  return [];
+};
+
 const formatDateTime = (value: string) => {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
@@ -42,19 +208,21 @@ export function LogsPage() {
   const [counts, setCounts] = useState<LogCounts>({ info: 0, error: 0, warn: 0 });
   const [logTypeFilter, setLogTypeFilter] = useState<LogType | "all">("all");
   const [search, setSearch] = useState("");
-  const [page, setPage] = useState(0);
-  const [size, setSize] = useState(10);
+  const [appliedSearch, setAppliedSearch] = useState("");
+  const [page, setPage] = useState(DEFAULT_PAGE);
+  const [size, setSize] = useState(DEFAULT_PAGE_SIZE);
+  const [totalCount, setTotalCount] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
-  const [isLoadingCounts, setIsLoadingCounts] = useState(false);
+  const [, setIsLoadingCounts] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [hasNextPage, setHasNextPage] = useState(false);
   const [streamJobId, setStreamJobId] = useState("");
   const [streamLogs, setStreamLogs] = useState<LogItem[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamError, setStreamError] = useState<string | null>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
 
-  const loadCounts = async () => {
+  const loadCounts = useCallback(async () => {
     setIsLoadingCounts(true);
     try {
       const response = await fetch("/api/log/count", { credentials: "include" });
@@ -74,16 +242,17 @@ export function LogsPage() {
     } finally {
       setIsLoadingCounts(false);
     }
-  };
+  }, []);
 
-  const loadLogs = async () => {
+  const loadLogs = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
       const params = new URLSearchParams();
       params.set("page", Math.max(0, page).toString());
       params.set("size", Math.max(1, size).toString());
-      if (search.trim()) params.set("search", search.trim());
+      if (appliedSearch) params.set("search", appliedSearch);
+      if (logTypeFilter !== "all") params.set("logType", logTypeFilter);
 
       const response = await fetch(`/api/log?${params.toString()}`, {
         credentials: "include",
@@ -92,28 +261,74 @@ export function LogsPage() {
       if (!response.ok || !contentType.includes("application/json")) {
         throw new Error("로그 데이터를 불러오지 못했습니다.");
       }
-      const data: LogItem[] = await response.json();
-      const items = Array.isArray(data) ? data : [];
+
+      const payload = await response.json();
+      const items = extractLogItems(payload);
+      const payloadRecord = payload && typeof payload === "object" ? (payload as Record<string, unknown>) : null;
+      const payloadSize = payloadRecord
+        ? parseNumericValue(payloadRecord["size"] ?? payloadRecord["pageSize"] ?? payloadRecord["limit"])
+        : undefined;
+      const payloadPage = payloadRecord
+        ? parseNumericValue(payloadRecord["page"] ?? payloadRecord["pageIndex"] ?? payloadRecord["currentPage"])
+        : undefined;
+      const resolvedPageSize = typeof payloadSize === "number" && payloadSize > 0 ? payloadSize : size;
+      const resolvedPageIndex = typeof payloadPage === "number" && payloadPage >= 0 ? payloadPage : page;
+      const totalCountFromPayload = extractTotalCount(payload);
+      const totalPagesFromPayload = extractTotalPages(payload);
+
+      const headerTotalPages = HEADER_TOTAL_PAGE_KEYS
+        .map((key) => response.headers.get(key))
+        .map((value) => parseNumericValue(value ?? undefined))
+        .find((value): value is number => typeof value === "number");
+
+      const headerTotalCount = HEADER_TOTAL_COUNT_KEYS
+        .map((key) => response.headers.get(key))
+        .map((value) => parseNumericValue(value ?? undefined))
+        .find((value): value is number => typeof value === "number");
+
+      const inferredFromPages = (() => {
+        if (typeof totalPagesFromPayload === "number" && totalPagesFromPayload > 0) {
+          return totalPagesFromPayload * resolvedPageSize;
+        }
+        if (typeof headerTotalPages === "number" && headerTotalPages > 0) {
+          return headerTotalPages * resolvedPageSize;
+        }
+        return undefined;
+      })();
+
+      const fallbackCount = resolvedPageIndex * resolvedPageSize + items.length;
+      const resolvedTotalCount = headerTotalCount ?? totalCountFromPayload ?? inferredFromPages ?? fallbackCount;
+
+      const inferredTotalPagesFromCount = resolvedTotalCount > 0 ? Math.ceil(resolvedTotalCount / resolvedPageSize) : undefined;
+      const fallbackPages = items.length === resolvedPageSize ? resolvedPageIndex + 2 : resolvedPageIndex + 1;
+      const resolvedTotalPages = headerTotalPages ?? totalPagesFromPayload ?? inferredTotalPagesFromCount ?? fallbackPages;
+
       setLogs(items);
-      setHasNextPage(items.length >= size);
+      setTotalCount(resolvedTotalCount);
+      setTotalPages(resolvedTotalPages);
+
+      const maxPageIndex = Math.max(0, Math.ceil(resolvedTotalPages) - 1);
+      if (page > maxPageIndex) {
+        setPage(maxPageIndex);
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : "로그 조회에 실패했습니다.";
       setError(message);
       setLogs([]);
-      setHasNextPage(false);
+      setTotalCount(0);
+      setTotalPages(0);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [appliedSearch, logTypeFilter, page, size]);
 
   useEffect(() => {
     loadCounts();
-  }, []);
+  }, [loadCounts]);
 
   useEffect(() => {
     loadLogs();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, size]);
+  }, [loadLogs]);
 
   const filteredLogs = useMemo(() => {
     return logs.filter((log) => (logTypeFilter === "all" ? true : log.logType === logTypeFilter));
@@ -129,13 +344,49 @@ export function LogsPage() {
     };
   }, [counts]);
 
+  const derivedTotalPages = totalCount > 0 ? Math.ceil(totalCount / size) : 0;
+  const effectiveTotalPages = totalPages > 0 ? totalPages : derivedTotalPages;
+  const pageGroupStart = effectiveTotalPages > 0 ? Math.floor(page / PAGE_GROUP_SIZE) * PAGE_GROUP_SIZE : 0;
+  const pageGroupEnd = effectiveTotalPages > 0 ? Math.min(effectiveTotalPages, pageGroupStart + PAGE_GROUP_SIZE) : 0;
+  const pageNumbers = Array.from(
+    { length: Math.max(0, pageGroupEnd - pageGroupStart) },
+    (_, index) => pageGroupStart + index
+  );
+
+  const canGoPrevPage = !isLoading && page > 0;
+  const canGoNextPage = !isLoading && effectiveTotalPages > 0 && page < effectiveTotalPages - 1;
+  const canGoGroupPrev = !isLoading && effectiveTotalPages > 0 && page > 0;
+  const canGoGroupNext = !isLoading && effectiveTotalPages > 0 && page < effectiveTotalPages - 1;
+
   const handleSearchSubmit = () => {
-    setPage(0);
-    loadLogs();
+    setPage(DEFAULT_PAGE);
+    setAppliedSearch(search.trim());
   };
 
-  const canGoPrev = page > 0;
-  const canGoNext = hasNextPage;
+  const handleGroupPrev = () => {
+    if (!canGoGroupPrev) return;
+    setPage((prev) => Math.max(DEFAULT_PAGE, prev - PAGE_GROUP_SIZE));
+  };
+
+  const handleGroupNext = () => {
+    if (!canGoGroupNext) return;
+    setPage((prev) => Math.min(Math.max(0, effectiveTotalPages - 1), prev + PAGE_GROUP_SIZE));
+  };
+
+  const handlePrev = () => {
+    if (!canGoPrevPage) return;
+    setPage((prev) => Math.max(DEFAULT_PAGE, prev - 1));
+  };
+
+  const handleNext = () => {
+    if (!canGoNextPage) return;
+    setPage((prev) => Math.min(Math.max(0, effectiveTotalPages - 1), prev + 1));
+  };
+
+  const handlePageSelect = (pageIndex: number) => {
+    if (pageIndex < 0 || (effectiveTotalPages > 0 && pageIndex > effectiveTotalPages - 1)) return;
+    setPage(pageIndex);
+  };
 
   const stopStream = () => {
     eventSourceRef.current?.close();
@@ -223,7 +474,7 @@ export function LogsPage() {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            {[
+            {[ 
               { label: "전체", value: summary.total, backgroundClass: "bg-card", toneClass: "text-foreground" },
               { label: "INFO", value: summary.info, backgroundClass: "card-info-soft", toneClass: "text-primary" },
               { label: "WARN", value: summary.warn, backgroundClass: "card-warn-soft", toneClass: "text-yellow-600" },
@@ -270,7 +521,13 @@ export function LogsPage() {
               </div>
             </div>
 
-            <Select value={logTypeFilter} onValueChange={(value) => setLogTypeFilter(value as typeof logTypeFilter)}>
+            <Select
+              value={logTypeFilter}
+              onValueChange={(value) => {
+                setLogTypeFilter(value as typeof logTypeFilter);
+                setPage(DEFAULT_PAGE);
+              }}
+            >
               <SelectTrigger className="w-36 bg-muted">
                 <SelectValue placeholder="로그 타입" />
               </SelectTrigger>
@@ -286,20 +543,20 @@ export function LogsPage() {
               value={String(size)}
               onValueChange={(value) => {
                 setSize(Number(value));
-                setPage(0);
+                setPage(DEFAULT_PAGE);
               }}
             >
               <SelectTrigger className="w-28 bg-muted">
                 <SelectValue placeholder="페이지 크기" />
               </SelectTrigger>
               <SelectContent>
-                {[10, 20, 50].map((opt) => (
+                {PAGE_SIZE_OPTIONS.map((opt) => (
                   <SelectItem key={opt} value={String(opt)}>
                     {opt}개씩
                   </SelectItem>
                 ))}
-                </SelectContent>
-              </Select>
+              </SelectContent>
+            </Select>
 
             <Button
               variant="default"
@@ -386,16 +643,35 @@ export function LogsPage() {
             </Table>
           </div>
 
-          <div className="flex items-center justify-end">
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={!canGoPrev || isLoading}>
-                이전
-              </Button>
-              <Button variant="outline" size="sm" onClick={() => setPage((p) => p + 1)} disabled={!canGoNext || isLoading}>
-                다음
-              </Button>
+          {effectiveTotalPages > 0 && (
+            <div className="mt-4 flex flex-col items-center gap-3">
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                <Button variant="ghost" size="sm" onClick={handleGroupPrev} disabled={!canGoGroupPrev}>
+                  {"<<"}
+                </Button>
+                <Button variant="ghost" size="sm" onClick={handlePrev} disabled={!canGoPrevPage}>
+                  {"<"}
+                </Button>
+                {pageNumbers.map((pageNumber) => (
+                  <Button
+                    key={pageNumber}
+                    size="sm"
+                    variant={pageNumber === page ? "default" : "outline"}
+                    onClick={() => handlePageSelect(pageNumber)}
+                    disabled={isLoading}
+                  >
+                    {pageNumber + 1}
+                  </Button>
+                ))}
+                <Button variant="ghost" size="sm" onClick={handleNext} disabled={!canGoNextPage}>
+                  {">"}
+                </Button>
+                <Button variant="ghost" size="sm" onClick={handleGroupNext} disabled={!canGoGroupNext}>
+                  {">>"}
+                </Button>
+              </div>
             </div>
-          </div>
+          )}
         </CardContent>
       </Card>
 
@@ -406,7 +682,7 @@ export function LogsPage() {
             파이프라인 로그 스트림 (SSE)
           </CardTitle>
           <CardDescription>식별 Id 기준으로 DB의 로그를 한번에 스트리밍합니다.</CardDescription>
-            <CardDescription>로그 리스트에서 선택 가능합니다.</CardDescription>
+          <CardDescription>로그 리스트에서 선택 가능합니다.</CardDescription>
 
         </CardHeader>
         <CardContent className="space-y-3">

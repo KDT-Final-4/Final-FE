@@ -48,7 +48,6 @@ export function LogsPage() {
   const [error, setError] = useState<string | null>(null);
   const [hasNextPage, setHasNextPage] = useState(false);
   const [streamJobId, setStreamJobId] = useState("");
-  const [streamFromId, setStreamFromId] = useState("");
   const [streamLogs, setStreamLogs] = useState<LogItem[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamError, setStreamError] = useState<string | null>(null);
@@ -143,29 +142,19 @@ export function LogsPage() {
     setIsStreaming(false);
   };
 
-  const startStream = (jobIdInput?: string, fromIdInput?: string) => {
+  const startStream = (jobIdInput?: string) => {
     const jobIdValue = (jobIdInput ?? streamJobId).trim();
-    const fromIdValue = (fromIdInput ?? streamFromId).trim();
     setStreamJobId(jobIdValue);
-    setStreamFromId(fromIdValue);
 
     if (!jobIdValue) {
-      setStreamError("Job ID를 입력하세요.");
+      setStreamError("식별 Id를 입력하세요.");
       return;
     }
     stopStream();
     setStreamError(null);
     setStreamLogs([]);
 
-    const params = new URLSearchParams();
-    if (fromIdValue) {
-      const parsed = Number(fromIdValue);
-      if (!Number.isNaN(parsed)) {
-        params.set("id", parsed.toString());
-      }
-    }
-    const query = params.toString();
-    const url = `/api/pipeline/${encodeURIComponent(jobIdValue)}${query ? `?${query}` : ""}`;
+    const url = `/api/pipeline/${encodeURIComponent(jobIdValue)}`;
 
     const es = new EventSource(url, { withCredentials: true });
     eventSourceRef.current = es;
@@ -253,68 +242,67 @@ export function LogsPage() {
           </CardTitle>
           <CardDescription>검색어, 로그 타입, 페이지 크기로 조회합니다.</CardDescription>
         </CardHeader>
-        <CardContent className="grid gap-3 md:grid-cols-4">
-          <div className="md:col-span-2">
-            <label className="sr-only" htmlFor="log-search">검색</label>
-            <div className="relative">
-              <Search className="w-4 h-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
-              <Input
-                id="log-search"
-                placeholder="메시지 검색"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    handleSearchSubmit();
-                  }
+        <CardContent className="space-y-3">
+          <div className="bg-secondary/20 border border-secondary/30 rounded-md p-4 flex flex-col gap-3 md:flex-row md:items-center">
+            <div className="flex-1 min-w-[220px]">
+              <label className="sr-only" htmlFor="log-search">검색</label>
+              <div className="relative">
+                <Input
+                  id="log-search"
+                  placeholder="메시지 검색"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      handleSearchSubmit();
+                    }
+                  }}
+                  className="pr-3 bg-muted"
+                />
+              </div>
+            </div>
+            <div className="flex flex-col w-full gap-3 md:flex-row md:w-auto md:items-center">
+              <Select value={logTypeFilter} onValueChange={(value) => setLogTypeFilter(value as typeof logTypeFilter)}>
+                <SelectTrigger className="w-full md:w-40 bg-muted">
+                  <SelectValue placeholder="로그 타입" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">전체</SelectItem>
+                  <SelectItem value="INFO">INFO</SelectItem>
+                  <SelectItem value="WARN">WARN</SelectItem>
+                  <SelectItem value="ERROR">ERROR</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select
+                value={String(size)}
+                onValueChange={(value) => {
+                  setSize(Number(value));
+                  setPage(0);
                 }}
-                className="pl-9"
-              />
+              >
+                <SelectTrigger className="w-full md:w-32 bg-muted">
+                  <SelectValue placeholder="페이지 크기" />
+                </SelectTrigger>
+                <SelectContent>
+                  {[10, 20, 50].map((opt) => (
+                    <SelectItem key={opt} value={String(opt)}>
+                      {opt}개씩
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
-          <Select value={logTypeFilter} onValueChange={(value) => setLogTypeFilter(value as typeof logTypeFilter)}>
-            <SelectTrigger>
-              <SelectValue placeholder="로그 타입" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">전체</SelectItem>
-              <SelectItem value="INFO">INFO</SelectItem>
-              <SelectItem value="WARN">WARN</SelectItem>
-              <SelectItem value="ERROR">ERROR</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select
-            value={String(size)}
-            onValueChange={(value) => {
-              setSize(Number(value));
-              setPage(0);
-            }}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="페이지 크기" />
-            </SelectTrigger>
-            <SelectContent>
-              {[10, 20, 50].map((opt) => (
-                <SelectItem key={opt} value={String(opt)}>
-                  {opt}개씩
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <div className="md:col-span-4 flex gap-2">
-              <Button
-                variant="default"
-                className="bg-primary text-primary-foreground hover:brightness-105"
-                onClick={handleSearchSubmit}
-                disabled={isLoading}
+          <div className="flex gap-2">
+            <Button
+              variant="default"
+              className="bg-primary text-primary-foreground hover:brightness-105"
+              onClick={handleSearchSubmit}
+              disabled={isLoading}
             >
               조회
             </Button>
-            <div className="text-sm text-muted-foreground flex items-center gap-2">
-              <span>페이지</span>
-              <code className="rounded bg-muted px-2 py-1">#{page + 1}</code>
-            </div>
           </div>
         </CardContent>
       </Card>
@@ -336,7 +324,7 @@ export function LogsPage() {
               <TableRow>
                 <TableHead>시간</TableHead>
                 <TableHead>타입</TableHead>
-                <TableHead>Job ID</TableHead>
+                <TableHead>식별 Id</TableHead>
                 <TableHead>메시지</TableHead>
                 <TableHead className="text-right">작성자 ID</TableHead>
               </TableRow>
@@ -390,8 +378,7 @@ export function LogsPage() {
             <TableCaption>서버에서 받은 순서대로 정렬됩니다.</TableCaption>
           </Table>
 
-          <div className="flex items-center justify-between">
-            <div className="text-sm text-muted-foreground">페이지: {page + 1}</div>
+          <div className="flex items-center justify-end">
             <div className="flex gap-2">
               <Button variant="outline" size="sm" onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={!canGoPrev || isLoading}>
                 이전
@@ -410,26 +397,17 @@ export function LogsPage() {
             <Clock className="w-4 h-4 text-primary" />
             파이프라인 로그 스트림 (SSE)
           </CardTitle>
-          <CardDescription>jobId 기준으로 DB의 로그를 한번에 스트리밍합니다.</CardDescription>
+          <CardDescription>식별 Id 기준으로 DB의 로그를 한번에 스트리밍합니다.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
-          <div className="grid gap-3 md:grid-cols-3">
+          <div className="grid gap-3 md:grid-cols-2">
             <div className="md:col-span-2">
-              <label className="sr-only" htmlFor="stream-jobid">Job ID</label>
+              <label className="sr-only" htmlFor="stream-jobid">식별 Id</label>
               <Input
                 id="stream-jobid"
-                placeholder="job-123"
+                placeholder="식별 Id (예: job-123)"
                 value={streamJobId}
                 onChange={(e) => setStreamJobId(e.target.value)}
-              />
-            </div>
-            <div>
-              <label className="sr-only" htmlFor="stream-from">fromId (선택)</label>
-              <Input
-                id="stream-from"
-                placeholder="fromId (숫자)"
-                value={streamFromId}
-                onChange={(e) => setStreamFromId(e.target.value)}
               />
             </div>
           </div>
@@ -459,7 +437,7 @@ export function LogsPage() {
                       {log.logType}
                     </Badge>
                   </div>
-                  <div className="text-xs text-muted-foreground">Job: {log.jobId || "-"}</div>
+                  <div className="text-xs text-muted-foreground">식별 Id: {log.jobId || "-"}</div>
                   <div className="text-sm whitespace-pre-line break-words">{log.message}</div>
                   <div className="text-xs text-muted-foreground text-right">userId: {log.userId}</div>
                 </div>

@@ -6,11 +6,11 @@ import {
   BarChart3, 
   Settings, 
   FileText, 
-  User,
   Zap,
   X,
   Logs,
   LogOut,
+  Calendar1,
 } from "lucide-react";
 
 export function Sidebar() {
@@ -53,6 +53,13 @@ export function Sidebar() {
       description: "Review reports"
     },
     {
+      id: "schedule",
+      path: "/schedule",
+      name: "스케줄",
+      icon: Calendar1,
+      description: "Reservation Content"
+    },
+    {
       id: "logs",
       path: "/logs",
       name: "로그",
@@ -66,14 +73,6 @@ export function Sidebar() {
       icon: Settings,
       description: "System settings"
     }
-    // },
-    // {
-    //   id: "profile",
-    //   path: "/profile",
-    //   name: "프로필",
-    //   icon: User,
-    //   description: "User preferences"
-    // }
   ];
 
   const displayName = userName || userEmail || "";

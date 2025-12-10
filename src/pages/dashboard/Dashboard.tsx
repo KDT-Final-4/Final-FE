@@ -3,7 +3,11 @@ import { Badge } from "../../components/ui/badge";
 import { ConsumptionChart } from "../../components/ConsumptionChart";
 import { DemandChart } from "../../components/DemandChart";
 import { EnergyParameters } from "../../components/EnergyParameters";
-import { EnhancedFilterSection } from "../trend/EnhancedFilterSection";
+
+type DateRange = {
+  start: string;
+  end: string;
+};
 
 type UserMeResponse = {
   userId?: number;
@@ -15,13 +19,60 @@ type UserMeResponse = {
   isDelete?: boolean;
 };
 
+type DashboardStatusResponse = {
+  allClicks?: number;
+  allViews?: number;
+  visitors?: number;
+  averageDwellTime?: number;
+};
+
+type ContentsCountResponse = {
+  contentsCount?: number;
+};
+
+const formatDate = (date: Date) => {
+  const year = date.getFullYear();
+  const month = `${date.getMonth() + 1}`.padStart(2, "0");
+  const day = `${date.getDate()}`.padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+const getDateRangeFromPeriod = (period: string): DateRange => {
+  const today = new Date();
+
+  switch (period) {
+    case "today": {
+      const formatted = formatDate(today);
+      return { start: formatted, end: formatted };
+    }
+    case "yesterday": {
+      const target = new Date(today);
+      target.setDate(today.getDate() - 1);
+      const formatted = formatDate(target);
+      return { start: formatted, end: formatted };
+    }
+    case "last-7-days": {
+      const start = new Date(today);
+      start.setDate(today.getDate() - 6);
+      return { start: formatDate(start), end: formatDate(today) };
+    }
+    case "last-30-days": {
+      const start = new Date(today);
+      start.setDate(today.getDate() - 29);
+      return { start: formatDate(start), end: formatDate(today) };
+    }
+    default:
+      return { start: "", end: "" };
+  }
+};
+
 export function Dashboard() {
-  const [selectedFilterType, setSelectedFilterType] = useState<"device" | "virtual-group">("device");
-  const [selectedDevice, setSelectedDevice] = useState("device-1");
-  const [selectedDevices, setSelectedDevices] = useState<string[]>([]);
-  const [dataMode, setDataMode] = useState("real-time");
-  const [selectedDay, setSelectedDay] = useState("today");
+  const selectedDevice = "device-1";
+  const [selectedDay] = useState("last-7-days");
+  const [dateRange, setDateRange] = useState<DateRange>(() => getDateRangeFromPeriod("last-7-days"));
   const [userName, setUserName] = useState("");
+  const [dashboardStatus, setDashboardStatus] = useState<DashboardStatusResponse | null>(null);
+  const [contentsCount, setContentsCount] = useState<number | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -73,27 +124,54 @@ export function Dashboard() {
     };
   }, []);
 
-  const handleApplyFilters = () => {
-    // In a real application, this would trigger data fetching
-    console.log("Applying filters:", {
-      filterType: selectedFilterType,
-      device: selectedDevice,
-      devices: selectedDevices,
-      dataMode,
-      selectedDay,
-    });
-  };
+  useEffect(() => {
+    let isMounted = true;
 
-  const handleFilterTypeChange = (type: "device" | "virtual-group") => {
-    setSelectedFilterType(type);
-    if (type === "device") {
-      setSelectedDevice("device-1");
-      setSelectedDevices([]);
-    } else {
-      setSelectedDevice("group-production");
-      setSelectedDevices([]);
-    }
-  };
+    const fetchDashboardData = async () => {
+      const statusEndpoint = "/api/dashboard/status";
+      const contentsCountEndpoint = "/api/dashboard/contents/count";
+
+      try {
+        console.log("[Dashboard] fetching status from", statusEndpoint);
+        console.log("[Dashboard] fetching contents count from", contentsCountEndpoint);
+
+        const [statusResponse, contentsCountResponse] = await Promise.all([
+          fetch(statusEndpoint, { credentials: "include" }),
+          fetch(contentsCountEndpoint, { credentials: "include" }),
+        ]);
+
+        const statusContentType = statusResponse.headers.get("content-type") || "unknown";
+        if (statusResponse.ok && statusContentType.includes("application/json")) {
+          const statusData: DashboardStatusResponse = await statusResponse.json();
+          console.log("[Dashboard] status payload", statusEndpoint, statusData);
+          if (isMounted) {
+            setDashboardStatus(statusData);
+          }
+        } else {
+          console.error("[Dashboard] failed to fetch status", statusEndpoint, statusResponse.status, statusContentType);
+        }
+
+        const contentsContentType = contentsCountResponse.headers.get("content-type") || "unknown";
+        if (contentsCountResponse.ok && contentsContentType.includes("application/json")) {
+          const countData: ContentsCountResponse = await contentsCountResponse.json();
+          console.log("[Dashboard] contents count payload", contentsCountEndpoint, countData);
+          if (isMounted && typeof countData.contentsCount === "number") {
+            setContentsCount(countData.contentsCount);
+          }
+        } else {
+          console.error("[Dashboard] failed to fetch contents count", contentsCountEndpoint, contentsCountResponse.status, contentsContentType);
+        }
+      } catch (error) {
+        console.error("[Dashboard] failed to fetch dashboard data", error);
+      }
+    };
+
+    fetchDashboardData();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: '#f8faf9' }}>
@@ -104,37 +182,22 @@ export function Dashboard() {
             <div>
               <h1 className="text-2xl font-semibold text-foreground">안녕하세요, {userName || "사용자"}! 👋</h1>
               <p className="text-muted-foreground mt-1">
-                What are you looking for today?
+                오늘 어떤 정보를 보고 싶으신가요?
               </p>
             </div>
             <div className="flex items-center gap-2">
               <Badge className="bg-primary/10 text-primary border-primary/20 px-3 py-1.5">
                 <div className="w-2 h-2 bg-primary rounded-full mr-2 animate-pulse"></div>
-                Real-time monitoring active
+                실시간 모니터링 중
               </Badge>
             </div>
           </div>
         </div>
 
-        {/* Enhanced Filter Section */}
-        <EnhancedFilterSection
-          selectedFilterType={selectedFilterType}
-          selectedDevice={selectedDevice}
-          selectedDevices={selectedDevices}
-          dataMode={dataMode}
-          selectedDay={selectedDay}
-          onFilterTypeChange={handleFilterTypeChange}
-          onDeviceChange={setSelectedDevice}
-          onDevicesChange={setSelectedDevices}
-          onDataModeChange={setDataMode}
-          onDayChange={setSelectedDay}
-          onApplyFilters={handleApplyFilters}
-        />
-
         {/* Energy Parameters */}
         <EnergyParameters 
-          dataMode={dataMode} 
-          selectedDevice={selectedFilterType === "device" ? selectedDevice : selectedDevices.join(",")} 
+          totalViews={dashboardStatus?.allClicks}
+          contentsCount={contentsCount ?? undefined}
         />
 
         {/* Charts Section */}
@@ -142,11 +205,15 @@ export function Dashboard() {
           {/* Consumption Overview */}
           <ConsumptionChart 
             selectedDay={selectedDay} 
-            selectedDevice={selectedFilterType === "device" ? selectedDevice : selectedDevices.join(",")} 
+            selectedDevice={selectedDevice} 
           />
           
-          {/* Max vs Actual Demand */}
-          <DemandChart dataMode={dataMode} selectedDay={selectedDay} />
+          {/* Daily clicks */}
+          <DemandChart 
+            selectedDay={selectedDay} 
+            dateRange={dateRange} 
+            onDateRangeChange={setDateRange}
+          />
         </div>
       </div>
     </div>

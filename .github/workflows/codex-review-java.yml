@@ -1,0 +1,483 @@
+name: Codex Code Review (TypeScript FE)
+
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize, ready_for_review]
+
+jobs:
+  codex-review:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      pull-requests: write
+
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      GITHUB_TOKEN: ${{ github.token }}
+
+    steps:
+      # ✅ base 브랜치만 checkout (신뢰된 코드만 실행)
+      - name: Checkout base branch (safe)
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.ref }}
+          fetch-depth: 0
+
+      - name: Get list of changed files
+        id: changed-files
+        run: |
+          set -euo pipefail
+          BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+
+          # ✅ 포크 PR 포함, PR 헤드 커밋을 별도 ref(pr_head)로 fetch
+          git fetch origin "pull/$PR_NUMBER/head:pr_head"
+
+          git diff --name-only "$BASE_SHA" pr_head > changed_files.txt
+          echo "Changed files:"
+          cat changed_files.txt || true
+
+          FILES=$(paste -sd, changed_files.txt || true)
+          echo "files=$FILES" >> "$GITHUB_OUTPUT"
+
+      - name: Validate OpenAI API Key
+        env:
+          API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          set -euo pipefail
+          
+          if [ -z "${API_KEY:-}" ]; then
+            echo "❌ FATAL ERROR: OPENAI_API_KEY is not set"
+            echo "Please configure OPENAI_API_KEY in GitHub repository secrets"
+            exit 1
+          fi
+          
+          API_KEY_LENGTH=${#API_KEY}
+          if [ "$API_KEY_LENGTH" -lt 20 ]; then
+            echo "⚠️  WARNING: OPENAI_API_KEY seems too short (length: $API_KEY_LENGTH)"
+            echo "Valid OpenAI API keys are typically 40+ characters"
+            echo "Note: GitHub Actions masks secrets, actual length may be longer"
+            echo "Proceeding with API call (actual validation will happen at API level)"
+          else
+            echo "✅ OPENAI_API_KEY length check passed (length: $API_KEY_LENGTH characters)"
+          fi
+          
+          # API 키 형식 검증 (sk-로 시작하는지 확인)
+          if [[ "$API_KEY" != sk-* ]]; then
+            echo "⚠️  WARNING: OPENAI_API_KEY does not start with 'sk-'"
+            echo "This might indicate an invalid or old API key format"
+            echo "Note: Actual validation will occur during API call"
+          else
+            echo "✅ OPENAI_API_KEY format check passed (starts with 'sk-')"
+          fi
+
+      - name: Build Codex prompt from diff
+        run: |
+          set -euo pipefail
+          BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+
+          # 위에서 fetch 했어도 한 번 더 시도하는 것은 문제 없습니다.
+          git fetch origin "pull/$PR_NUMBER/head:pr_head" || true
+
+          # Diff 크기 체크
+          DIFF_LINES=$(git --no-pager diff --unified=5 "$BASE_SHA" pr_head | wc -l)
+          echo "📊 Diff size: $DIFF_LINES lines"
+          
+          if [ "$DIFF_LINES" -gt 5000 ]; then
+            echo "⚠️  WARNING: Diff is very large ($DIFF_LINES lines)"
+            echo "   Codex review might fail or be incomplete"
+            echo "   Consider splitting this PR into smaller changes"
+          fi
+
+          cat > codex-prompt.md << 'EOF'
+          당신은 TypeScript 기반 프론트엔드(React, Vite, Radix UI)를 담당하는 시니어 프론트엔드 개발자입니다.
+          아래 Pull Request의 변경 사항에 대해 코드 리뷰를 수행하십시오.
+
+          요구사항:
+          - 반드시 한국어로, 존댓말(십시오체/합니다체)로 답변하십시오.
+          - 리뷰 결과는 JSON 배열로만 작성하십시오. 다른 텍스트는 포함하지 마십시오.
+          - 각 항목은 다음 필드를 포함해야 합니다:
+            - "file": "변경된 파일의 상대 경로"
+            - "line": 해당 이슈를 대표하는 코드의 1-based line 번호
+            - "severity": "Critical", "Major", "Minor" 중 하나
+            - "title": 이슈를 한 문장으로 요약한 한국어 제목
+            - "body": 문제 설명과 개선 제안을 담은 한국어 본문. 반드시 존댓말을 사용하십시오.
+
+          심각도 기준:
+          - Critical: 모델 로직이 잘못되어 결과가 완전히 틀어지는 경우, 심각한 메모리 누수, 무한 루프, 보안 이슈, NullPointerException 등 반드시 수정해야 하는 이슈
+          - Major: 학습/추론 성능 저하 가능성이 큰 코드, 데이터 전처리 오류, 잘못된 예외 처리, API 오용, 리소스 누수 등
+          - Minor: 코드 스타일, 리팩터링 제안, 변수명/함수명 개선 등
+
+          이 저장소는 다음과 같은 역할을 합니다:
+          - TypeScript 기반 React 프론트엔드
+          - Vite 번들러, Radix UI 컴포넌트 사용
+          - Java 백엔드 레포와만 상호작용
+
+          리뷰 시 특히 다음을 주의 깊게 봐 주십시오:
+          - 컴포넌트의 책임 분리가 적절한지
+          - 상태 관리가 과도하게 상위로 퍼지지 않았는지
+          - 비동기 통신(백엔드 호출)과 에러 처리가 적절한지
+          - 접근성(ARIA 속성, 키보드 네비게이션 등)이 심각하게 깨지지 않았는지
+          - 불필요한 재렌더링, 메모리 누수(useEffect 의존성 등)가 없는지
+          
+          필요하다면 src/ 디렉터리 내부 파일을 우선적으로 리뷰하고, 빌드 결과물(dist 등)은 무시하십시오.
+
+          아래에는 이번 Pull Request의 diff가 포함됩니다.
+          이 diff에서 보이는 부분에 대해서만 리뷰를 작성하십시오.
+
+          최종 출력은 반드시 위에서 정의한 JSON 배열 형식만 사용하십시오.
+          EOF
+
+          echo "" >> codex-prompt.md
+          echo "=== DIFF START ===" >> codex-prompt.md
+          git --no-pager diff --unified=5 "$BASE_SHA" pr_head >> codex-prompt.md
+
+      - name: Run Codex review
+        id: run-codex
+        uses: openai/codex-action@main
+        with:
+          openai-api-key: ${{ env.OPENAI_API_KEY }}
+          prompt-file: codex-prompt.md
+          model: gpt-4o-mini
+          output-file: codex-output.json
+          sandbox: read-only
+        continue-on-error: true
+
+      - name: Check Codex review result
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          
+          # 이전 스텝의 결과 확인
+          if [ "${{ steps.run-codex.outcome }}" = "failure" ]; then
+            echo "❌ Codex review step failed"
+            echo "Possible causes:"
+            echo "  1. Invalid or expired OPENAI_API_KEY"
+            echo "  2. API rate limit exceeded"
+            echo "  3. Network connectivity issue"
+            echo "  4. Invalid model name (currently using: gpt-4o-mini)"
+            echo "  5. Diff size too large (> 5000 lines)"
+            echo ""
+            echo "Debug information:"
+            echo "  - API Key status: ${{ env.OPENAI_API_KEY != '' && '✅ Set' || '❌ Not Set' }}"
+            exit 1
+          fi
+          
+          # 출력 파일 존재 여부 확인
+          if [ ! -f codex-output.json ]; then
+            echo "❌ ERROR: codex-output.json file not created"
+            echo "The Codex review action may have failed silently"
+            exit 1
+          fi
+          
+          # 출력 파일이 비어있는지 확인
+          if [ ! -s codex-output.json ]; then
+            echo "⚠️  WARNING: codex-output.json is empty"
+            echo "Codex may have encountered an error or returned no comments"
+            exit 1
+          fi
+          
+          echo "✅ Codex review completed successfully"
+          echo "Output file size: $(wc -c < codex-output.json) bytes"
+
+      - name: Parse Codex output into GitHub comments
+        id: parse-codex
+        run: |
+          set -euo pipefail
+
+          if [ ! -s codex-output.json ]; then
+            echo "Codex output is empty. Nothing to comment."
+            echo "has_comments=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "Codex raw output:"
+          cat codex-output.json
+          echo ""
+
+          # AI 출력에서 JSON 배열만 추출하는 전처리 함수
+          extract_json_array() {
+            local input_file="$1"
+            local output_file="$2"
+            
+            # 임시 파일에 원본 저장
+            cp "$input_file" "${input_file}.raw"
+            
+            # 방법 1: 마크다운 코드 블록 내부의 JSON 추출
+            # ```json ... ``` 또는 ``` ... ``` 패턴 찾기
+            if grep -q '```' "${input_file}.raw"; then
+              # 코드 블록 내부 내용만 추출
+              sed -n '/```[a-z]*/,/```/p' "${input_file}.raw" | \
+              sed 's/```[a-z]*//g' | \
+              sed 's/```//g' | \
+              sed '/^[[:space:]]*$/d' > "${output_file}.tmp" 2>/dev/null || true
+              
+              if [ -s "${output_file}.tmp" ]; then
+                if jq . "${output_file}.tmp" > "${output_file}" 2>/dev/null; then
+                  echo "Successfully extracted JSON from code block"
+                  rm -f "${input_file}.raw" "${output_file}.tmp"
+                  return 0
+                fi
+              fi
+            fi
+            
+            # 방법 2: 첫 번째 [ 부터 마지막 ] 까지 추출 (중첩 구조 고려)
+            # sed와 awk를 사용하여 JSON 배열 추출
+            # 마크다운 코드 블록 제거 후 JSON 배열 추출
+            sed -E 's/```[a-z]*//g; s/```//g' "${input_file}.raw" | \
+            awk '
+            BEGIN { in_array = 0; brace_count = 0; start_line = 0 }
+            {
+              for (i = 1; i <= length($0); i++) {
+                char = substr($0, i, 1)
+                if (char == "[") {
+                  if (in_array == 0) {
+                    in_array = 1
+                    start_line = NR
+                    brace_count = 1
+                    printf "%s", char
+                  } else {
+                    brace_count++
+                    printf "%s", char
+                  }
+                } else if (char == "]") {
+                  if (in_array == 1) {
+                    brace_count--
+                    printf "%s", char
+                    if (brace_count == 0) {
+                      in_array = 0
+                      exit
+                    }
+                  }
+                } else if (in_array == 1) {
+                  printf "%s", char
+                }
+              }
+              if (in_array == 1) printf "\n"
+            }
+            ' > "${output_file}.tmp" 2>/dev/null || true
+            
+            if [ -s "${output_file}.tmp" ]; then
+              if jq . "${output_file}.tmp" > "${output_file}" 2>/dev/null; then
+                echo "Successfully extracted JSON array using awk"
+                rm -f "${input_file}.raw" "${output_file}.tmp"
+                return 0
+              fi
+            fi
+            
+            # 방법 3: 원본에서 직접 JSON 파싱 시도 (이미 JSON인 경우)
+            if jq 'try (fromjson) catch .' "$input_file" > "${output_file}" 2>/dev/null; then
+              # 결과가 배열인지 확인
+              if jq 'if type == "array" then . else empty end' "${output_file}" > "${output_file}.array" 2>/dev/null; then
+                if [ -s "${output_file}.array" ]; then
+                  mv "${output_file}.array" "${output_file}"
+                  echo "Successfully parsed JSON array from raw output"
+                  rm -f "${input_file}.raw" "${output_file}.tmp"
+                  return 0
+                fi
+              fi
+              rm -f "${output_file}.array"
+            fi
+            
+            # 모든 방법 실패 시 빈 배열 반환
+            echo "Failed to extract JSON array, returning empty array"
+            echo "[]" > "${output_file}"
+            rm -f "${input_file}.raw" "${output_file}.tmp"
+            return 1
+          }
+
+          # JSON 배열 추출 시도
+          if ! extract_json_array codex-output.json codex-output.json; then
+            echo "Warning: Could not extract valid JSON array from Codex output"
+            echo "has_comments=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # JSON 배열이 비어있거나 null인지 확인
+          ARRAY_LENGTH=$(jq 'if . == null then 0 else length end' codex-output.json 2>/dev/null || echo "0")
+          
+          if [ "$ARRAY_LENGTH" -eq 0 ] || [ "$ARRAY_LENGTH" = "null" ]; then
+            echo "No review comments from Codex (empty or null array)."
+            echo "has_comments=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "Parsed Codex comments (array length: $ARRAY_LENGTH):"
+          cat codex-output.json
+
+          echo "has_comments=true" >> "$GITHUB_OUTPUT"
+
+      - name: Post inline review comments to PR
+        if: steps.parse-codex.outputs.has_comments == 'true'
+        run: |
+          set -euo pipefail
+
+          PR_NUMBER=${{ github.event.pull_request.number }}
+          REPO=${{ github.repository }}
+          COMMIT_SHA=${{ github.event.pull_request.head.sha }}
+
+          length=$(jq 'length' codex-output.json 2>/dev/null || echo "0")
+          if [ "$length" -eq 0 ]; then
+            echo "No comments to post."
+            exit 0
+          fi
+
+          echo "Posting $length review comments from Codex..."
+          SUCCESS_COUNT=0
+          FAIL_COUNT=0
+
+          for i in $(seq 0 $((length - 1))); do
+            # 필수 필드 추출 (에러 발생 시 건너뛰기)
+            file=$(jq -r ".[$i].file // empty" codex-output.json 2>/dev/null || echo "")
+            line=$(jq -r ".[$i].line // 1" codex-output.json 2>/dev/null || echo "1")
+            severity=$(jq -r ".[$i].severity // \"Minor\"" codex-output.json 2>/dev/null || echo "Minor")
+            title=$(jq -r ".[$i].title // \"코드 리뷰\"" codex-output.json 2>/dev/null || echo "코드 리뷰")
+            body=$(jq -r ".[$i].body // \"\"" codex-output.json 2>/dev/null || echo "")
+
+            # 필수 필드 검증
+            if [ -z "$file" ] || [ "$file" = "null" ]; then
+              echo "Warning: Skipping comment $i (missing file field)"
+              FAIL_COUNT=$((FAIL_COUNT + 1))
+              continue
+            fi
+
+            # line이 숫자인지 확인
+            if ! [[ "$line" =~ ^[0-9]+$ ]]; then
+              echo "Warning: Invalid line number '$line' for $file, using line 1"
+              line=1
+            fi
+
+            comment="[$severity] $title
+            $body"
+
+            echo "Comment on $file:$line"
+            echo "$comment"
+            echo "----"
+
+            # comment.json 생성 (에러 처리)
+            if ! jq -n \
+              --arg body "$comment" \
+              --arg path "$file" \
+              --argjson line "$line" \
+              --arg sha "$COMMIT_SHA" \
+              '{
+                  body: $body,
+                  path: $path,
+                  line: $line,
+                  side: "RIGHT",
+                  commit_id: $sha
+                }' > comment.json 2>/dev/null; then
+              echo "Error: Failed to create comment.json for $file:$line"
+              FAIL_COUNT=$((FAIL_COUNT + 1))
+              continue
+            fi
+
+            # GitHub API에 코멘트 전송 (에러 처리)
+            HTTP_CODE=$(curl -sS -w "%{http_code}" -o /tmp/curl_response.json \
+              -X POST \
+              -H "Accept: application/vnd.github+json" \
+              -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "https://api.github.com/repos/$REPO/pulls/$PR_NUMBER/comments" \
+              -d @comment.json || echo "000")
+
+            if [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ]; then
+              echo "Successfully posted comment for $file:$line"
+              SUCCESS_COUNT=$((SUCCESS_COUNT + 1))
+            else
+              echo "Error: Failed to post comment for $file:$line (HTTP $HTTP_CODE)"
+              cat /tmp/curl_response.json 2>/dev/null || true
+              FAIL_COUNT=$((FAIL_COUNT + 1))
+            fi
+          done
+
+          echo "Comment posting summary: $SUCCESS_COUNT succeeded, $FAIL_COUNT failed"
+          if [ "$FAIL_COUNT" -gt 0 ] && [ "$SUCCESS_COUNT" -eq 0 ]; then
+            echo "All comments failed to post. Exiting with error."
+            exit 1
+          fi
+
+      - name: Post summary comment
+        if: steps.parse-codex.outputs.has_comments == 'true'
+        run: |
+          set -euo pipefail
+
+          PR_NUMBER=${{ github.event.pull_request.number }}
+          REPO=${{ github.repository }}
+
+          SUMMARY="**Codex 자동 코드 리뷰 요약**
+
+          Codex가 PR에 대한 자동 코드 리뷰를 생성하였습니다.
+          세부 내용은 inline 코멘트를 참고해 주십시오."
+
+          # summary.json 생성 (에러 처리)
+          if ! jq -n --arg body "$SUMMARY" '{ body: $body }' > summary.json 2>/dev/null; then
+            echo "Error: Failed to create summary.json"
+            exit 1
+          fi
+
+          # GitHub API에 요약 코멘트 전송 (에러 처리)
+          HTTP_CODE=$(curl -sS -w "%{http_code}" -o /tmp/summary_response.json \
+            -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/$REPO/issues/$PR_NUMBER/comments" \
+            -d @summary.json || echo "000")
+
+          if [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ]; then
+            echo "Successfully posted summary comment"
+          else
+            echo "Warning: Failed to post summary comment (HTTP $HTTP_CODE)"
+            cat /tmp/summary_response.json 2>/dev/null || true
+            # 요약 코멘트 실패는 치명적이지 않으므로 exit 0
+            exit 0
+          fi
+
+      - name: Post error comment if Codex review failed
+        if: failure() && steps.run-codex.outcome == 'failure'
+        run: |
+          set -euo pipefail
+          
+          PR_NUMBER=${{ github.event.pull_request.number }}
+          REPO=${{ github.repository }}
+          
+          ERROR_MESSAGE="❌ **Codex 자동 코드 리뷰 실패**
+
+          Codex 리뷰 중 오류가 발생했습니다.
+
+          **가능한 원인:**
+          1. **API 키 문제**: OPENAI_API_KEY가 유효하지 않거나 만료됨
+          2. **API 호출 실패**: OpenAI API 서버 오류 또는 네트워크 문제
+          3. **모델 오류**: gpt-4o-mini 모델을 찾을 수 없음
+          4. **Diff 크기**: 변경 사항이 너무 많음 (5000줄 이상)
+          5. **Rate limit**: API 호출 한도 초과
+
+          **해결 방법:**
+          - 리포지토리 설정에서 OPENAI_API_KEY가 올바르게 설정되어 있는지 확인하세요
+          - API 키가 유효한지 OpenAI 대시보드에서 확인하세요
+          - 변경 사항이 많으면 PR을 더 작은 단위로 분할하세요
+          - 리포지토리 관리자에게 문의하세요
+
+          **워크플로우 로그:** https://github.com/$REPO/actions/runs/${{ github.run_id }}"
+          
+          # error-comment.json 생성
+          jq -n --arg body "$ERROR_MESSAGE" '{ body: $body }' > error-comment.json
+          
+          # GitHub API에 에러 메시지 전송
+          HTTP_CODE=$(curl -sS -w "%{http_code}" -o /tmp/error_response.json \
+            -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${{ github.token }}" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/$REPO/issues/$PR_NUMBER/comments" \
+            -d @error-comment.json || echo "000")
+          
+          if [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ]; then
+            echo "✅ Successfully posted error comment to PR"
+          else
+            echo "⚠️  Warning: Failed to post error comment (HTTP $HTTP_CODE)"
+            cat /tmp/error_response.json 2>/dev/null || true
+          fi

@@ -337,12 +337,12 @@ export function SchedulePage() {
       <div className="space-y-6">
         <Card className="lg:col-span-3">
           <CardHeader>
-            <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="flex flex-wrap justify-between gap-4">
               <div className="space-y-1">
                 <CardTitle className="text-xl">스케줄 목록</CardTitle>
                 <CardDescription>스케줄을 수정하시려면 목록을 클릭해주세요. </CardDescription>
               </div>
-              <div className="flex flex-wrap gap-2 sm:justify-end sm:self-start">
+              <div className="flex items-center gap-3">
                 <Button variant="outline" onClick={loadScheduleList} disabled={isListLoading}>
                   {isListLoading ? "새로고침..." : "목록 새로고침"}
                 </Button>
@@ -496,7 +496,7 @@ export function SchedulePage() {
         {schedule && (
           <Card className="lg:col-span-3" ref={editSectionRef}>
             <CardHeader className="space-y-3">
-              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex flex-wrap justify-between gap-4">
                 <div className="flex flex-col gap-2">
                   <div className="flex flex-wrap items-center gap-2">
                     <Badge variant={schedule.isActive ? "default" : "secondary"}>
@@ -506,6 +506,21 @@ export function SchedulePage() {
                   </div>
                   <CardTitle className="text-xl">스케줄 정보 · 수정</CardTitle>
                   <CardDescription>선택한 스케줄의 상태와 수정 영역을 한눈에 확인하세요.</CardDescription>
+                </div>
+                <div className="flex items-center gap-3">
+                  <Switch
+                    id={`schedule-${schedule.id}-active-toggle`}
+                    checked={schedule.isActive}
+                    disabled={isToggling || isLoading}
+                    onCheckedChange={(checked) => {
+                      if (checked === schedule.isActive) return;
+                      toggleActive(schedule.id);
+                    }}
+                    aria-label="스케줄 활성화 전환"
+                  />
+                  <Label htmlFor={`schedule-${schedule.id}-active-toggle`} className="text-sm cursor-pointer">
+                    {isToggling ? "변경 중..." : schedule.isActive ? "활성화됨" : "비활성화됨"}
+                  </Label>
                 </div>
               </div>
             </CardHeader>
@@ -518,21 +533,7 @@ export function SchedulePage() {
 
               <Separator />
 
-              <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-semibold text-foreground">상세 기록</h3>
-                    <Badge variant="outline">읽기</Badge>
-                  </div>
-                  <div className="space-y-3 rounded-lg border bg-muted/30 p-4">
-                    <InfoRow label="반복" value={getRepeatLabel(schedule.repeatInterval)} />
-                    <InfoRow label="시작 시간" value={formatDateTime(schedule.startTime)} />
-                    <InfoRow label="최근 실행 시각" value={formatDateTime(schedule.lastExecutedAt)} />
-                    <InfoRow label="생성일" value={formatDateTime(schedule.createdAt)} />
-                    <InfoRow label="업데이트" value={formatDateTime(schedule.updatedAt)} />
-                  </div>
-                </div>
-
+              <div className="grid grid-cols-1 gap-6">
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <div>
@@ -577,6 +578,13 @@ export function SchedulePage() {
                         >
                           취소
                         </Button>
+                      )}
+                      {isEditing && (
+                        <div className="flex flex-wrap gap-3 pt-2">
+                          <Button onClick={handleSave} disabled={isSaving || isLoading || !activeScheduleId}>
+                            {isSaving ? "저장 중..." : "저장"}
+                          </Button>
+                        </div>
                       )}
                        <Button
                           type="button"
@@ -635,14 +643,6 @@ export function SchedulePage() {
                       <p className="text-xs text-muted-foreground">
                         상단의 &quot;수정&quot; 버튼을 눌러 편집 모드로 전환하세요.
                       </p>
-                    )}
-
-                    {isEditing && (
-                      <div className="flex flex-wrap gap-3 pt-2">
-                        <Button onClick={handleSave} disabled={isSaving || isLoading || !activeScheduleId}>
-                          {isSaving ? "저장 중..." : "저장"}
-                        </Button>
-                      </div>
                     )}
                   </div>
                 </div>

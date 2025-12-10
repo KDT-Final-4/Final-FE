@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../..
 import { Input } from "../../components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
 import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from "../../components/ui/table";
+import { KpiCard } from "../../components/KpiCard";
 
 type LogType = "INFO" | "ERROR" | "WARN";
 
@@ -212,23 +213,33 @@ export function LogsPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        {[
-          { label: "전체", value: summary.total, tone: "text-foreground" },
-          { label: "INFO", value: summary.info, tone: "text-primary", cardClass: "card-info-soft" },
-          { label: "WARN", value: summary.warn, tone: "text-yellow-600", cardClass: "card-warn-soft" },
-          { label: "ERROR", value: summary.error, tone: "text-red-600", cardClass: "card-error-soft" },
-        ].map((item) => (
-          <Card key={item.label} className={`border-border/80 shadow-sm ${item.cardClass ?? ""}`}>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm text-muted-foreground">{item.label}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className={`text-3xl font-semibold ${item.tone}`}>{item.value}</p>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      <Card className="border-l-4 border-l-green-500">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Activity className="w-4 h-4 text-primary" />
+            로그 요약
+          </CardTitle>
+          <CardDescription>전체/INFO/WARN/ERROR 상태를 한눈에 확인하세요.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            {[
+              { label: "전체", value: summary.total, backgroundClass: "bg-card", toneClass: "text-foreground" },
+              { label: "INFO", value: summary.info, backgroundClass: "card-info-soft", toneClass: "text-primary" },
+              { label: "WARN", value: summary.warn, backgroundClass: "card-warn-soft", toneClass: "text-yellow-600" },
+              { label: "ERROR", value: summary.error, backgroundClass: "card-error-soft", toneClass: "text-red-600" },
+            ].map((item) => (
+              <KpiCard
+                key={item.label}
+                label={item.label}
+                value={item.value}
+                backgroundClass={item.backgroundClass}
+                toneClass={item.toneClass}
+              />
+            ))}
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
@@ -239,13 +250,13 @@ export function LogsPage() {
           <CardDescription>검색어, 로그 타입, 페이지 크기로 조회합니다.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
-          <div className="bg-secondary/20 border border-secondary/30 rounded-md p-4 flex flex-col gap-3 md:flex-row md:items-center">
-            <div className="flex-1 min-w-[220px]">
-              <label className="sr-only" htmlFor="log-search">검색</label>
+          <div className="bg-secondary/20 border border-secondary/30 rounded-md p-4 flex flex-row flex-nowrap items-center gap-3 overflow-x-auto">
+            <div className="flex-[1.7] min-w-[320px]">
               <div className="relative">
                 <Input
                   id="log-search"
-                  placeholder="메시지 검색"
+                  aria-label="메시지 검색"
+                  placeholder="메시지 검색 ex) UPDATE "
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   onKeyDown={(e) => {
@@ -258,42 +269,41 @@ export function LogsPage() {
                 />
               </div>
             </div>
-            <div className="flex flex-col w-full gap-3 md:flex-row md:w-auto md:items-center">
-              <Select value={logTypeFilter} onValueChange={(value) => setLogTypeFilter(value as typeof logTypeFilter)}>
-                <SelectTrigger className="w-full md:w-40 bg-muted">
-                  <SelectValue placeholder="로그 타입" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">전체</SelectItem>
-                  <SelectItem value="INFO">INFO</SelectItem>
-                  <SelectItem value="WARN">WARN</SelectItem>
-                  <SelectItem value="ERROR">ERROR</SelectItem>
+
+            <Select value={logTypeFilter} onValueChange={(value) => setLogTypeFilter(value as typeof logTypeFilter)}>
+              <SelectTrigger className="w-36 bg-muted">
+                <SelectValue placeholder="로그 타입" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">전체</SelectItem>
+                <SelectItem value="INFO">INFO</SelectItem>
+                <SelectItem value="WARN">WARN</SelectItem>
+                <SelectItem value="ERROR">ERROR</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select
+              value={String(size)}
+              onValueChange={(value) => {
+                setSize(Number(value));
+                setPage(0);
+              }}
+            >
+              <SelectTrigger className="w-28 bg-muted">
+                <SelectValue placeholder="페이지 크기" />
+              </SelectTrigger>
+              <SelectContent>
+                {[10, 20, 50].map((opt) => (
+                  <SelectItem key={opt} value={String(opt)}>
+                    {opt}개씩
+                  </SelectItem>
+                ))}
                 </SelectContent>
               </Select>
-              <Select
-                value={String(size)}
-                onValueChange={(value) => {
-                  setSize(Number(value));
-                  setPage(0);
-                }}
-              >
-                <SelectTrigger className="w-full md:w-32 bg-muted">
-                  <SelectValue placeholder="페이지 크기" />
-                </SelectTrigger>
-                <SelectContent>
-                  {[10, 20, 50].map((opt) => (
-                    <SelectItem key={opt} value={String(opt)}>
-                      {opt}개씩
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <div className="flex gap-2">
+
             <Button
               variant="default"
-              className="bg-primary text-primary-foreground hover:brightness-105"
+              className="bg-primary text-primary-foreground hover:brightness-105 px-4"
               onClick={handleSearchSubmit}
               disabled={isLoading}
             >
@@ -315,65 +325,66 @@ export function LogsPage() {
             </div>
           )}
 
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>시간</TableHead>
-                <TableHead>타입</TableHead>
-                <TableHead>식별 Id</TableHead>
-                <TableHead>메시지</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoading && (
+          <div className="rounded-lg border overflow-hidden">
+            <Table>
+              <TableHeader>
                 <TableRow>
-                  <TableCell colSpan={4} className="text-center text-muted-foreground">
-                    불러오는 중...
-                  </TableCell>
+                  <TableHead>시간</TableHead>
+                  <TableHead>타입</TableHead>
+                  <TableHead>식별 Id</TableHead>
+                  <TableHead>메시지</TableHead>
                 </TableRow>
-              )}
-              {!isLoading && filteredLogs.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={4} className="text-center text-muted-foreground">
-                    표시할 로그가 없습니다.
-                  </TableCell>
-                </TableRow>
-              )}
-              {!isLoading &&
-                filteredLogs.map((log) => {
-                  const isClickable = Boolean(log.jobId);
-                  return (
-                    <TableRow
-                      key={log.id}
-                      className={
-                        isClickable
-                          ? "cursor-pointer bg-secondary/20 hover:bg-secondary/30 transition-colors"
-                          : undefined
-                      }
-                      onClick={() => {
-                        if (log.jobId) startStream(log.jobId);
-                      }}
-                    >
-                      <TableCell>{formatDateTime(log.createdAt)}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className={LOGTYPE_BADGE[log.logType]}>
-                          {log.logType}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        <div className="flex items-center gap-2">
-                          <span>{log.jobId || "-"}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="max-w-[360px] whitespace-pre-line break-words" title={log.message}>
-                        {log.message}
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-            </TableBody>
-            <TableCaption>서버에서 받은 순서대로 정렬됩니다.</TableCaption>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {isLoading && (
+                  <TableRow>
+                    <TableCell colSpan={4} className="text-center text-muted-foreground">
+                      불러오는 중...
+                    </TableCell>
+                  </TableRow>
+                )}
+                {!isLoading && filteredLogs.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={4} className="text-center text-muted-foreground">
+                      표시할 로그가 없습니다.
+                    </TableCell>
+                  </TableRow>
+                )}
+                {!isLoading &&
+                  filteredLogs.map((log) => {
+                    const isClickable = Boolean(log.jobId);
+                    return (
+                      <TableRow
+                        key={log.id}
+                        className={
+                          isClickable
+                            ? "cursor-pointer bg-secondary/20 hover:bg-secondary/30 transition-colors"
+                            : undefined
+                        }
+                        onClick={() => {
+                          if (log.jobId) startStream(log.jobId);
+                        }}
+                      >
+                        <TableCell>{formatDateTime(log.createdAt)}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className={LOGTYPE_BADGE[log.logType]}>
+                            {log.logType}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">
+                          <div className="flex items-center gap-2">
+                            <span>{log.jobId || "-"}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="max-w-[360px] whitespace-pre-line break-words" title={log.message}>
+                          {log.message}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+              </TableBody>
+            </Table>
+          </div>
 
           <div className="flex items-center justify-end">
             <div className="flex gap-2">

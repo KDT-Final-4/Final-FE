@@ -36,6 +36,7 @@ const PAGE_SIZE_OPTIONS = [10, 30];
 const DEFAULT_PAGE_SIZE = 10;
 const CHART_TOP_N = 5;
 const MIN_SLICE_VALUE = 0.0001;
+const AGGREGATION_PAGE_SIZE = DEFAULT_PAGE_SIZE;
 const parseNumeric = (value: unknown) => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : undefined;
@@ -43,8 +44,11 @@ const parseNumeric = (value: unknown) => {
 
 export function ConsumptionChart({ selectedDay: _selectedDay, selectedDevice: _selectedDevice }: ConsumptionChartProps) {
   const [contents, setContents] = useState<ContentItem[]>([]);
+  const [chartContents, setChartContents] = useState<ContentItem[]>([]);
   const [loading, setLoading] = useState(false);
+  const [chartLoading, setChartLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [chartError, setChartError] = useState<string | null>(null);
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [totalCount, setTotalCount] = useState(0);
@@ -174,10 +178,87 @@ export function ConsumptionChart({ selectedDay: _selectedDay, selectedDevice: _s
 
   // 카테고리가 바뀌면 색상 맵이 커질 수 있어, 목록이 비면 초기화
   useEffect(() => {
-    if (contents.length === 0) {
+    if (chartContents.length === 0) {
       colorMapRef.current.clear();
     }
-  }, [contents.length]);
+  }, [chartContents.length]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const fetchAllContents = async () => {
+      setChartLoading(true);
+      setChartError(null);
+      try {
+        const firstEndpoint = `/api/dashboard/contents?page=0&size=${AGGREGATION_PAGE_SIZE}`;
+        const firstResponse = await fetch(firstEndpoint, {
+          credentials: "include",
+          signal: controller.signal,
+        });
+
+        const firstContentType = firstResponse.headers.get("content-type") || "unknown";
+        if (!firstResponse.ok) {
+          throw new Error(`콘텐츠 데이터를 불러오지 못했습니다 (${firstResponse.status})`);
+        }
+
+        if (!firstContentType.includes("application/json")) {
+          const text = await firstResponse.text();
+          throw new Error(`예상치 못한 응답 형식입니다: ${firstContentType} ${text.slice(0, 120)}`);
+        }
+
+        const firstPayload: ContentsResponse = await firstResponse.json();
+        const firstItems = firstPayload.items ?? firstPayload.contents ?? [];
+        const responseTotalCount = parseNumeric(firstPayload.totalCount) ?? parseNumeric(firstResponse.headers.get("X-Total-Count"));
+        const responseTotalPages = parseNumeric(firstPayload.totalPages) ?? parseNumeric(firstResponse.headers.get("X-Total-Pages"));
+
+        const derivedTotalPages = typeof responseTotalCount === "number" && responseTotalCount > 0
+          ? Math.ceil(responseTotalCount / AGGREGATION_PAGE_SIZE)
+          : 0;
+        const totalPagesForAggregation = typeof responseTotalPages === "number" && responseTotalPages > 0
+          ? responseTotalPages
+          : derivedTotalPages;
+
+        const restPageCount = Math.max(0, (totalPagesForAggregation || 0) - 1);
+
+        if (restPageCount === 0) {
+          setChartContents(firstItems);
+          return;
+        }
+
+        const restRequests = Array.from({ length: restPageCount }, (_, index) => {
+          const pageIndex = index + 1;
+          const endpoint = `/api/dashboard/contents?page=${pageIndex}&size=${AGGREGATION_PAGE_SIZE}`;
+
+          return fetch(endpoint, {
+            credentials: "include",
+            signal: controller.signal,
+          })
+            .then(async (response) => {
+              const contentType = response.headers.get("content-type") || "unknown";
+              if (!response.ok || !contentType.includes("application/json")) {
+                return [];
+              }
+              const payload: ContentsResponse = await response.json();
+              return payload.items ?? payload.contents ?? [];
+            })
+            .catch(() => []);
+        });
+
+        const restResults = await Promise.all(restRequests);
+        setChartContents([...firstItems, ...restResults.flat()]);
+      } catch (fetchError) {
+        if (controller.signal.aborted) return;
+        const message = fetchError instanceof Error ? fetchError.message : "전체 데이터를 불러오는 데 실패했습니다.";
+        setChartError(message);
+      } finally {
+        if (!controller.signal.aborted) {
+          setChartLoading(false);
+        }
+      }
+    };
+
+    fetchAllContents();
+    return () => controller.abort();
+  }, []);
 
   const chartData = useMemo(() => {
     // categoryId -> 집계
@@ -186,7 +267,7 @@ export function ConsumptionChart({ selectedDay: _selectedDay, selectedDevice: _s
       { categoryId?: number; categoryName: string; clicks: number }
     >();
 
-    contents.forEach((item) => {
+    chartContents.forEach((item) => {
       const key = buildCategoryKey(item);
       const categoryName = item.categoryName ?? "기타";
       const prev = aggregated.get(key) ?? { categoryId: item.categoryId, categoryName, clicks: 0 };
@@ -221,7 +302,7 @@ export function ConsumptionChart({ selectedDay: _selectedDay, selectedDevice: _s
     }
 
     return mappedTop;
-  }, [contents]);
+  }, [chartContents]);
 
   const totalClicks = chartData.reduce((sum, item) => sum + item.rawValue, 0);
 
@@ -259,12 +340,12 @@ export function ConsumptionChart({ selectedDay: _selectedDay, selectedDevice: _s
   };
 
   const renderBody = () => {
-    if (loading) {
+    if (chartLoading || loading) {
       return <div className="h-80 flex items-center justify-center text-sm text-muted-foreground">콘텐츠를 불러오는 중...</div>;
     }
 
-    if (error) {
-      return <div className="h-80 flex items-center justify-center text-sm text-destructive">{error}</div>;
+    if (chartError || error) {
+      return <div className="h-80 flex items-center justify-center text-sm text-destructive">{chartError ?? error}</div>;
     }
 
     if (!chartData.length) {

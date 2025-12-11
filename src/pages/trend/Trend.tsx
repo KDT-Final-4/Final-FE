@@ -393,9 +393,10 @@ export function Trend() {
         body: JSON.stringify({ keyword }),
       });
 
-      if (!response.ok) {
-        throw new Error("콘텐츠 생성 요청이 실패했습니다.");
-      }
+        if (!response.ok) {
+            console.error("콘텐츠 생성 요청이 실패했습니다.");
+            return;
+        }
     } catch (error) {
       console.error("[Trend] failed to trigger content creation", error);
     }

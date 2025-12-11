@@ -1,5 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
+import { Button } from "./ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from "recharts";
 import { MousePointerClick } from "lucide-react";
 
@@ -14,22 +16,44 @@ type ContentItem = {
   keyword: string;
   contentLink: string;
   clickCount: number;
+  categoryId?: number;
+  categoryName?: string;
 };
 
 type ContentsResponse = {
   contents?: ContentItem[];
+  items?: ContentItem[];
+  totalCount?: number;
+  totalPages?: number;
+  page?: number;
+  size?: number;
 };
 
 const palette = ["#22c55e", "#16a34a", "#15803d", "#166534", "#14532d", "#052e16"];
+const OTHER_SLICE_COLOR = "#94a3b8";
+const PAGE_GROUP_SIZE = 10;
+const PAGE_SIZE_OPTIONS = [10, 30];
+const DEFAULT_PAGE_SIZE = 10;
+const CHART_TOP_N = 5;
+const MIN_SLICE_VALUE = 0.0001;
+const parseNumeric = (value: unknown) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+};
 
 export function ConsumptionChart({ selectedDay: _selectedDay, selectedDevice: _selectedDevice }: ConsumptionChartProps) {
   const [contents, setContents] = useState<ContentItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
+  const [totalCount, setTotalCount] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  const colorMapRef = useRef<Map<string, string>>(new Map());
 
   useEffect(() => {
     const controller = new AbortController();
-    const endpoint = "/api/dashboard/contents";
+    const endpoint = `/api/dashboard/contents?page=${page}&size=${pageSize}`;
 
     const fetchContents = async () => {
       setLoading(true);
@@ -53,7 +77,21 @@ export function ConsumptionChart({ selectedDay: _selectedDay, selectedDevice: _s
         }
 
         const payload: ContentsResponse = await response.json();
-        setContents(payload.contents ?? []);
+        const items = payload.items ?? payload.contents ?? [];
+        const responseTotalCount = parseNumeric(payload.totalCount) ?? parseNumeric(response.headers.get("X-Total-Count"));
+        const responseTotalPages = parseNumeric(payload.totalPages) ?? parseNumeric(response.headers.get("X-Total-Pages"));
+        const derivedTotalCount = typeof responseTotalCount === "number" ? responseTotalCount : page * pageSize + items.length;
+        const derivedTotalPages = derivedTotalCount > 0 ? Math.ceil(derivedTotalCount / pageSize) : 0;
+        const resolvedTotalPages = typeof responseTotalPages === "number" && responseTotalPages > 0 ? responseTotalPages : derivedTotalPages;
+
+        setContents(items);
+        setTotalCount(derivedTotalCount);
+        setTotalPages(resolvedTotalPages);
+
+        const maxPageIndex = Math.max(0, resolvedTotalPages - 1);
+        if (items.length && page > maxPageIndex) {
+          setPage(maxPageIndex);
+        }
       } catch (fetchError) {
         if (controller.signal.aborted) return;
         const message = fetchError instanceof Error ? fetchError.message : "알 수 없는 오류가 발생했습니다.";
@@ -67,29 +105,136 @@ export function ConsumptionChart({ selectedDay: _selectedDay, selectedDevice: _s
 
     fetchContents();
     return () => controller.abort();
-  }, []);
+  }, [page, pageSize]);
 
-  const chartData = useMemo(
-    () =>
-      contents.map((item, index) => ({
-        name: `${item.title} - ${item.keyword}`,
-        value: item.clickCount ?? 0,
-        color: palette[index % palette.length],
-      })),
-    [contents]
+  const derivedTotalPages = totalCount > 0 ? Math.ceil(totalCount / pageSize) : 0;
+  const resolvedTotalPages = totalPages > 0 ? totalPages : derivedTotalPages;
+  const pageGroupStart = resolvedTotalPages > 0 ? Math.floor(page / PAGE_GROUP_SIZE) * PAGE_GROUP_SIZE : 0;
+  const pageGroupEnd = resolvedTotalPages > 0 ? Math.min(resolvedTotalPages, pageGroupStart + PAGE_GROUP_SIZE) : 0;
+  const pageNumbers = Array.from(
+    { length: Math.max(0, pageGroupEnd - pageGroupStart) },
+    (_, index) => pageGroupStart + index
   );
+  const canGoPrev = page > 0;
+  const canGoNext = resolvedTotalPages > 0 && page < resolvedTotalPages - 1;
+  const canGoGroupPrev = resolvedTotalPages > 0 && page > 0;
+  const canGoGroupNext = resolvedTotalPages > 0 && page < resolvedTotalPages - 1;
 
-  const totalClicks = chartData.reduce((sum, item) => sum + item.value, 0);
+  const handleGroupPrev = () => {
+    if (loading || !canGoGroupPrev) return;
+    setPage((prev) => Math.max(0, prev - PAGE_GROUP_SIZE));
+  };
+
+  const handleGroupNext = () => {
+    if (loading || !canGoGroupNext) return;
+    setPage((prev) => Math.min(resolvedTotalPages - 1, prev + PAGE_GROUP_SIZE));
+  };
+
+  const handlePrev = () => {
+    if (loading || !canGoPrev) return;
+    setPage((prev) => Math.max(0, prev - 1));
+  };
+
+  const handleNext = () => {
+    if (loading || !canGoNext) return;
+    setPage((prev) => Math.min(resolvedTotalPages - 1, prev + 1));
+  };
+
+  const handlePageSelect = (pageIndex: number) => {
+    if (loading || pageIndex < 0 || (resolvedTotalPages > 0 && pageIndex > resolvedTotalPages - 1)) {
+      return;
+    }
+    setPage(pageIndex);
+  };
+
+  const handlePageSizeChange = (value: string) => {
+    const newSize = Number(value);
+    if (!Number.isFinite(newSize)) return;
+    setPage(0);
+    setPageSize(newSize);
+  };
+
+  const buildCategoryKey = (content: ContentItem) => {
+    if (content.categoryId !== undefined && content.categoryId !== null) {
+      return `id-${content.categoryId}`;
+    }
+    if (content.categoryName) {
+      return `name-${content.categoryName}`;
+    }
+    return "unknown";
+  };
+
+  const getColorForCategory = (categoryKey: string, fallbackIndex: number) => {
+    const existing = colorMapRef.current.get(categoryKey);
+    if (existing) return existing;
+    const color = palette[colorMapRef.current.size % palette.length];
+    colorMapRef.current.set(categoryKey, color);
+    return color;
+  };
+
+  // 카테고리가 바뀌면 색상 맵이 커질 수 있어, 목록이 비면 초기화
+  useEffect(() => {
+    if (contents.length === 0) {
+      colorMapRef.current.clear();
+    }
+  }, [contents.length]);
+
+  const chartData = useMemo(() => {
+    // categoryId -> 집계
+    const aggregated = new Map<
+      string,
+      { categoryId?: number; categoryName: string; clicks: number }
+    >();
+
+    contents.forEach((item) => {
+      const key = buildCategoryKey(item);
+      const categoryName = item.categoryName ?? "기타";
+      const prev = aggregated.get(key) ?? { categoryId: item.categoryId, categoryName, clicks: 0 };
+      aggregated.set(key, { ...prev, clicks: prev.clicks + (item.clickCount ?? 0) });
+    });
+
+    const sorted = Array.from(aggregated.values()).sort((a, b) => b.clicks - a.clicks);
+    const topItems = sorted.slice(0, CHART_TOP_N);
+    const others = sorted.slice(CHART_TOP_N);
+
+    const mappedTop = topItems.map((item, index) => {
+      const rawValue = item.clicks ?? 0;
+      const categoryKey = item.categoryId !== undefined && item.categoryId !== null
+        ? `id-${item.categoryId}`
+        : item.categoryName;
+      return {
+        name: item.categoryName,
+        rawValue,
+        renderValue: rawValue > 0 ? rawValue : MIN_SLICE_VALUE,
+        color: getColorForCategory(categoryKey ?? "unknown", index),
+      };
+    });
+
+    if (others.length) {
+      const othersRawValue = others.reduce((sum, item) => sum + (item.clicks ?? 0), 0);
+      mappedTop.push({
+        name: `기타 ${others.length}개`,
+        rawValue: othersRawValue,
+        renderValue: othersRawValue > 0 ? othersRawValue : MIN_SLICE_VALUE,
+        color: OTHER_SLICE_COLOR,
+      });
+    }
+
+    return mappedTop;
+  }, [contents]);
+
+  const totalClicks = chartData.reduce((sum, item) => sum + item.rawValue, 0);
 
   const CustomTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
-      const data = payload[0];
-      const percentage = totalClicks ? ((data.value / totalClicks) * 100).toFixed(1) : "0.0";
+      const data = payload[0]?.payload;
+      const rawValue = data?.rawValue ?? 0;
+      const percentage = totalClicks ? ((rawValue / totalClicks) * 100).toFixed(1) : "0.0";
       return (
         <div className="bg-background border border-border rounded-lg p-3 shadow-lg">
-          <p className="font-medium">{data.name}</p>
+          <p className="font-medium">{data?.name}</p>
           <p className="text-sm text-muted-foreground">
-            {data.value.toLocaleString()}회 클릭 ({percentage}%)
+            {rawValue.toLocaleString()}회 클릭 ({percentage}%)
           </p>
         </div>
       );
@@ -106,7 +251,7 @@ export function ConsumptionChart({ selectedDay: _selectedDay, selectedDevice: _s
               className="w-3 h-3 rounded-full" 
               style={{ backgroundColor: entry.color }}
             />
-            <span className="text-foreground">{entry.value}</span>
+            <span className="text-foreground">{(entry.payload?.rawValue ?? 0).toLocaleString()}</span>
           </div>
         ))}
       </div>
@@ -143,7 +288,7 @@ export function ConsumptionChart({ selectedDay: _selectedDay, selectedDevice: _s
                 innerRadius={60}
                 outerRadius={120}
                 paddingAngle={2}
-                dataKey="value"
+                dataKey="renderValue"
               >
                 {chartData.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={entry.color} />
@@ -156,9 +301,23 @@ export function ConsumptionChart({ selectedDay: _selectedDay, selectedDevice: _s
         </div>
 
         <div className="space-y-2">
-          <h4 className="text-sm font-medium">콘텐츠 목록</h4>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h4 className="text-sm font-medium">콘텐츠 목록</h4>
+            <Select value={String(pageSize)} onValueChange={handlePageSizeChange}>
+              <SelectTrigger className="w-[140px]">
+                <SelectValue placeholder="페이지 크기" />
+              </SelectTrigger>
+              <SelectContent>
+                {PAGE_SIZE_OPTIONS.map((sizeOption) => (
+                  <SelectItem key={sizeOption} value={String(sizeOption)}>
+                    {sizeOption}개씩 보기
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
           <div className="grid grid-cols-1 gap-2">
-            {contents.slice(0, 3).map((content, index) => (
+            {contents.map((content, index) => (
               <a
                 key={content.contentId ?? index}
                 href={content.contentLink}
@@ -167,7 +326,10 @@ export function ConsumptionChart({ selectedDay: _selectedDay, selectedDevice: _s
                 className="flex items-center justify-between p-2 bg-muted/50 rounded-md cursor-pointer hover:bg-muted transition-colors"
               >
                 <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full" style={{ backgroundColor: palette[index % palette.length] }} />
+                  <div
+                    className="w-2 h-2 rounded-full"
+                    style={{ backgroundColor: getColorForCategory(buildCategoryKey(content), index) }}
+                  />
                   <span className="text-sm">{`${content.title} - ${content.keyword}`}</span>
                 </div>
                 <span className="flex items-center gap-1 text-sm font-medium text-foreground">
@@ -177,6 +339,33 @@ export function ConsumptionChart({ selectedDay: _selectedDay, selectedDevice: _s
               </a>
             ))}
           </div>
+          {resolvedTotalPages > 0 && (
+            <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
+              <Button variant="ghost" size="sm" onClick={handleGroupPrev} disabled={loading || !canGoGroupPrev}>
+                {"<<"}
+              </Button>
+              <Button variant="ghost" size="sm" onClick={handlePrev} disabled={loading || !canGoPrev}>
+                {"<"}
+              </Button>
+              {pageNumbers.map((pageNumber) => (
+                <Button
+                  key={pageNumber}
+                  size="sm"
+                  variant={pageNumber === page ? "default" : "outline"}
+                  onClick={() => handlePageSelect(pageNumber)}
+                  disabled={loading}
+                >
+                  {pageNumber + 1}
+                </Button>
+              ))}
+              <Button variant="ghost" size="sm" onClick={handleNext} disabled={loading || !canGoNext}>
+                {">"}
+              </Button>
+              <Button variant="ghost" size="sm" onClick={handleGroupNext} disabled={loading || !canGoGroupNext}>
+                {">>"}
+              </Button>
+            </div>
+          )}
         </div>
       </>
     );

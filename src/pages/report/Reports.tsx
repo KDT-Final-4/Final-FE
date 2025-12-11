@@ -1,16 +1,16 @@
-import { type KeyboardEvent, type MouseEvent, useCallback, useEffect, useMemo, useState } from "react";
-import { createPortal } from "react-dom";
-import { Ban, CheckCircle2, Clock3, type LucideIcon } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import {type KeyboardEvent, type MouseEvent, useCallback, useEffect, useMemo, useState} from "react";
+import {createPortal} from "react-dom";
+import {Ban, CheckCircle2, Clock3, type LucideIcon} from "lucide-react";
+import {Badge} from "@/components/ui/badge";
+import {Button} from "@/components/ui/button";
 import {
   Card,
   CardContent,
   CardFooter,
   CardHeader,
 } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {Tabs, TabsContent, TabsList, TabsTrigger} from "@/components/ui/tabs";
+import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from "@/components/ui/select";
 
 const TEXT_LIMIT = 100;
 const DEFAULT_PAGE = 0;
@@ -158,7 +158,7 @@ export function ReportsPage() {
       const safePage = Number.isFinite(page) ? Math.max(0, Math.floor(page)) : DEFAULT_PAGE;
       const safeSize = Number.isFinite(size) ? Math.max(1, Math.floor(size)) : DEFAULT_PAGE_SIZE;
       setLoadingStatus(status);
-      setErrorMap((prev) => ({ ...prev, [status]: null }));
+      setErrorMap((prev) => ({...prev, [status]: null}));
 
       const params = new URLSearchParams({
         status,
@@ -168,6 +168,12 @@ export function ReportsPage() {
       const endpoint = `${contentEndpoint}?${params.toString()}`;
 
       try {
+        const setStatusError = (message: string) =>
+          setErrorMap((prev) => ({
+            ...prev,
+            [status]: message,
+          }));
+
         console.log("[Reports] fetching content from", endpoint);
         const response = await fetch(endpoint, {
           credentials: "include",
@@ -179,20 +185,20 @@ export function ReportsPage() {
         const contentType = response.headers.get("content-type") || "unknown";
 
         if (!response.ok) {
-          throw new Error(
-            `서버에서 오류가 발생했습니다. (${response.status}, ${contentType})`
-          );
+          setStatusError(`서버에서 오류가 발생했습니다. (${response.status}, ${contentType})`);
+          return;
         }
 
         if (!contentType.includes("application/json")) {
           const text = await response.text();
-          throw new Error(`JSON 응답이 아닙니다. (${contentType}, ${text.slice(0, 100)})`);
+          setStatusError(`JSON 응답이 아닙니다. (${contentType}, ${text.slice(0, 100)})`);
+          return;
         }
 
         const payload = await response.json();
         console.log("[Reports] response payload", endpoint, payload);
         const normalized = normalizeReportItems(payload);
-        const { totalCount, totalPages } = resolveReportsTotals({
+        const {totalCount, totalPages} = resolveReportsTotals({
           payload,
           response,
           page: safePage,
@@ -200,13 +206,13 @@ export function ReportsPage() {
           itemsLength: normalized.length,
         });
 
-        setReportMap((prev) => ({ ...prev, [status]: normalized }));
-        setTotalCountMap((prev) => ({ ...prev, [status]: totalCount }));
-        setTotalPagesMap((prev) => ({ ...prev, [status]: totalPages }));
+        setReportMap((prev) => ({...prev, [status]: normalized}));
+        setTotalCountMap((prev) => ({...prev, [status]: totalCount}));
+        setTotalPagesMap((prev) => ({...prev, [status]: totalPages}));
 
         const maxPageIndex = totalPages > 0 ? Math.max(0, Math.ceil(totalPages) - 1) : 0;
         if (totalPages > 0 && safePage > maxPageIndex && normalized.length === 0) {
-          setPageMap((prev) => ({ ...prev, [status]: maxPageIndex }));
+          setPageMap((prev) => ({...prev, [status]: maxPageIndex}));
         }
       } catch (error) {
         console.error("[Reports] failed to fetch reports", endpoint, error);
@@ -272,7 +278,7 @@ export function ReportsPage() {
     const pageGroupStart = showPagination ? Math.floor(currentPage / PAGE_GROUP_SIZE) * PAGE_GROUP_SIZE : 0;
     const pageGroupEnd = showPagination ? Math.min(normalizedTotalPages, pageGroupStart + PAGE_GROUP_SIZE) : 0;
     const pageNumbers = Array.from(
-      { length: Math.max(0, pageGroupEnd - pageGroupStart) },
+      {length: Math.max(0, pageGroupEnd - pageGroupStart)},
       (_, index) => pageGroupStart + index
     );
 
@@ -310,7 +316,7 @@ export function ReportsPage() {
           </p>
           <Select value={String(pageSize)} onValueChange={handlePageSizeChange}>
             <SelectTrigger className="w-[140px]">
-              <SelectValue placeholder="페이지 크기" />
+              <SelectValue placeholder="페이지 크기"/>
             </SelectTrigger>
             <SelectContent>
               {PAGE_SIZE_OPTIONS.map((sizeOption) => (
@@ -322,7 +328,7 @@ export function ReportsPage() {
           </Select>
         </div>
 
-				<TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-3">
           {tabs.map((tab) => (
             <TabsTrigger
               key={tab.value}
@@ -339,7 +345,7 @@ export function ReportsPage() {
         {tabs.map((tab) => {
           const tabError = errorMap[tab.value];
           const meta = getTabMeta(tab.value);
-          const { items, currentPage, maxPageIndex, pageNumbers, normalizedTotalPages, showPagination } = meta;
+          const {items, currentPage, maxPageIndex, pageNumbers, normalizedTotalPages, showPagination} = meta;
           const isTabLoading = loadingStatus === tab.value;
           const showLoadingState = isTabLoading && items.length === 0 && !tabError;
           const handleToggleReport = (reportId: string) => {
@@ -360,9 +366,9 @@ export function ReportsPage() {
             if (safeNextPage === currentPage) {
               return;
             }
-            setReportMap((prev) => ({ ...prev, [tab.value]: [] }));
-            setErrorMap((prev) => ({ ...prev, [tab.value]: null }));
-            setPageMap((prev) => ({ ...prev, [tab.value]: safeNextPage }));
+            setReportMap((prev) => ({...prev, [tab.value]: []}));
+            setErrorMap((prev) => ({...prev, [tab.value]: null}));
+            setPageMap((prev) => ({...prev, [tab.value]: safeNextPage}));
           };
 
           const handleGroupPrev = () => {
@@ -425,7 +431,8 @@ export function ReportsPage() {
               {showPagination && (
                 <div className="flex flex-col items-center gap-3">
                   <div className="flex flex-wrap items-center justify-center gap-2">
-                    <Button variant="ghost" size="sm" onClick={handleGroupPrev} disabled={isTabLoading || currentPage === 0}>
+                    <Button variant="ghost" size="sm" onClick={handleGroupPrev}
+                            disabled={isTabLoading || currentPage === 0}>
                       {"<<"}
                     </Button>
                     <Button variant="ghost" size="sm" onClick={handlePrev} disabled={isTabLoading || currentPage === 0}>
@@ -466,17 +473,17 @@ export function ReportsPage() {
         })}
       </Tabs>
 
-      <PreviewModal report={previewReport} onClose={() => setPreviewReport(null)} />
+      <PreviewModal report={previewReport} onClose={() => setPreviewReport(null)}/>
     </div>
   );
 }
 
 function ReportCard({
-  report,
-  onPreview,
-  isExpanded,
-  onToggle,
-}: {
+                      report,
+                      onPreview,
+                      isExpanded,
+                      onToggle,
+                    }: {
   report: ReportItem;
   onPreview: (report: ReportItem | null) => void;
   isExpanded: boolean;
@@ -554,9 +561,9 @@ function ReportCard({
 }
 
 function PreviewModal({
-  report,
-  onClose,
-}: {
+                        report,
+                        onClose,
+                      }: {
   report: ReportItem | null;
   onClose: () => void;
 }) {
@@ -566,8 +573,9 @@ function PreviewModal({
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-      <div className="relative z-10 max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-lg border border-border bg-background p-6 shadow-2xl">
+      <div className="absolute inset-0 bg-black/50" onClick={onClose}/>
+      <div
+        className="relative z-10 max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-lg border border-border bg-background p-6 shadow-2xl">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex flex-wrap items-center gap-3">
             <h2 className="text-2xl font-semibold text-foreground">{report.title}</h2>
@@ -932,7 +940,7 @@ function extractNumericFromHeaders(response: Response, keys: string[]): number |
   return undefined;
 }
 
-function resolveReportsTotals({ payload, response, page, size, itemsLength }: ResolveTotalsArgs) {
+function resolveReportsTotals({payload, response, page, size, itemsLength}: ResolveTotalsArgs) {
   const payloadRecord = payload && typeof payload === "object" ? (payload as Record<string, unknown>) : null;
   const payloadSize = payloadRecord
     ? parseNumericValue(payloadRecord["size"] ?? payloadRecord["pageSize"] ?? payloadRecord["limit"])

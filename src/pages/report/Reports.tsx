@@ -1,5 +1,4 @@
-import {type KeyboardEvent, type MouseEvent, useCallback, useEffect, useMemo, useState} from "react";
-import {createPortal} from "react-dom";
+import {Fragment, type KeyboardEvent, type MouseEvent, useCallback, useEffect, useMemo, useRef, useState} from "react";
 import {Ban, CheckCircle2, Clock3, type LucideIcon} from "lucide-react";
 import {Badge} from "@/components/ui/badge";
 import {Button} from "@/components/ui/button";
@@ -11,12 +10,16 @@ import {
 } from "@/components/ui/card";
 import {Tabs, TabsContent, TabsList, TabsTrigger} from "@/components/ui/tabs";
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from "@/components/ui/select";
+import {Input} from "@/components/ui/input";
+import {Textarea} from "@/components/ui/textarea";
+import {Label} from "@/components/ui/label";
 
-const TEXT_LIMIT = 100;
+const TEXT_LIMIT = 150;
 const DEFAULT_PAGE = 0;
 const DEFAULT_PAGE_SIZE = 5;
 const PAGE_SIZE_OPTIONS = [5, 10, 20, 30] as const;
 const PAGE_GROUP_SIZE = 10;
+const MIN_BODY_TEXTAREA_HEIGHT = 160;
 
 const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "/api";
 const sanitizedApiBase = apiBaseUrl.endsWith("/") ? apiBaseUrl.slice(0, -1) : apiBaseUrl;
@@ -146,12 +149,12 @@ export function ReportsPage() {
   const [totalPagesMap, setTotalPagesMap] = useState<Record<ContentStatus, number>>(() =>
     createInitialCountState()
   );
-  const [previewReport, setPreviewReport] = useState<ReportItem | null>(null);
   const [loadingStatus, setLoadingStatus] = useState<ContentStatus | null>(null);
   const [errorMap, setErrorMap] = useState<Record<ContentStatus, string | null>>(
     () => createInitialErrorState()
   );
   const [expandedReports, setExpandedReports] = useState<Set<string>>(() => new Set());
+  const [statusUpdatingIds, setStatusUpdatingIds] = useState<Set<string>>(() => new Set());
 
   const fetchReports = useCallback(
     async (status: ContentStatus, page: number, size: number) => {
@@ -265,6 +268,71 @@ export function ReportsPage() {
     fetchReports(status, targetPage, pageSize);
   };
 
+  const refreshActiveTabReports = useCallback(() => {
+    const targetPage = pageMap[activeTab] ?? DEFAULT_PAGE;
+    fetchReports(activeTab, targetPage, pageSize);
+  }, [activeTab, fetchReports, pageMap, pageSize]);
+
+  const toggleStatusUpdating = useCallback((reportId: string, updating: boolean) => {
+    setStatusUpdatingIds((prev) => {
+      const next = new Set(prev);
+      if (updating) {
+        next.add(reportId);
+      } else {
+        next.delete(reportId);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleStatusChange = useCallback(
+    async (report: ReportItem, nextStatus: ContentStatus) => {
+      if (report.status !== "PENDING" || report.status === nextStatus) {
+        return;
+      }
+
+      const endpoint = `${contentEndpoint}/status/${report.id}`;
+      toggleStatusUpdating(report.id, true);
+
+      try {
+        const headers: Record<string, string> = {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        };
+        const csrfToken = getCookieValue("XSRF-TOKEN");
+        if (csrfToken) {
+          headers["X-XSRF-TOKEN"] = csrfToken;
+        }
+
+        const response = await fetch(endpoint, {
+          method: "PATCH",
+          credentials: "include",
+          headers,
+          body: JSON.stringify({ status: nextStatus }),
+        });
+
+        const contentType = response.headers.get("content-type") || "unknown";
+
+        if (!response.ok) {
+          throw new Error(
+            `콘텐츠 상태 변경 실패 (${response.status}, ${contentType})`
+          );
+        }
+
+        refreshActiveTabReports();
+      } catch (error) {
+        console.error("[Reports] failed to update status", endpoint, error);
+        setErrorMap((prev) => ({
+          ...prev,
+          [activeTab]: error instanceof Error ? error.message : "상태 변경에 실패했습니다.",
+        }));
+      } finally {
+        toggleStatusUpdating(report.id, false);
+      }
+    },
+    [activeTab, refreshActiveTabReports, toggleStatusUpdating]
+  );
+
   const getTabMeta = (status: ContentStatus) => {
     const items = reportMap[status] ?? [];
     const storedPage = pageMap[status] ?? DEFAULT_PAGE;
@@ -336,7 +404,7 @@ export function ReportsPage() {
               className="flex items-center gap-2"
             >
               <span>
-                {tab.label} ({tab.count.toLocaleString()})
+                {tab.label}
               </span>
             </TabsTrigger>
           ))}
@@ -421,9 +489,11 @@ export function ReportsPage() {
                   <ReportCard
                     key={report.id}
                     report={report}
-                    onPreview={setPreviewReport}
                     isExpanded={expandedReports.has(report.id)}
                     onToggle={() => handleToggleReport(report.id)}
+                    onStatusChange={(nextStatus) => handleStatusChange(report, nextStatus)}
+                    isStatusUpdating={statusUpdatingIds.has(report.id)}
+                    onRefresh={refreshActiveTabReports}
                   />
                 ))
               )}
@@ -472,179 +542,321 @@ export function ReportsPage() {
           );
         })}
       </Tabs>
-
-      <PreviewModal report={previewReport} onClose={() => setPreviewReport(null)}/>
     </div>
   );
 }
 
 function ReportCard({
-                      report,
-                      onPreview,
-                      isExpanded,
-                      onToggle,
-                    }: {
+  report,
+  isExpanded,
+  onToggle,
+  onStatusChange,
+  isStatusUpdating,
+  onRefresh,
+}: {
   report: ReportItem;
-  onPreview: (report: ReportItem | null) => void;
   isExpanded: boolean;
   onToggle: () => void;
+  onStatusChange: (nextStatus: ContentStatus) => void;
+  isStatusUpdating: boolean;
+  onRefresh: () => void;
 }) {
   const status = STATUS_META[report.status];
+  const [isEditing, setIsEditing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState(() => ({
+    title: report.title ?? "",
+    body: report.body ?? "",
+  }));
+  const bodyTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const handleCardKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (isEditing || event.target !== event.currentTarget) {
+      return;
+    }
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
       onToggle();
     }
   };
-  const handlePreviewClick = (event: MouseEvent<HTMLButtonElement>) => {
-    event.stopPropagation();
-    onPreview(report);
+  const handleCardClick = (event: MouseEvent<HTMLDivElement>) => {
+    if (isEditing) {
+      event.stopPropagation();
+      return;
+    }
+    onToggle();
   };
-  const stopPropagation = (event: MouseEvent<HTMLButtonElement>) => {
+  const handleStatusButtonClick = (event: MouseEvent<HTMLButtonElement>, nextStatus: ContentStatus) => {
+    event.stopPropagation();
+    onStatusChange(nextStatus);
+  };
+  const handleEditClick = (event: MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation();
+    setEditForm({
+      title: report.title ?? "",
+      body: report.body ?? "",
+    });
+    setEditError(null);
+    setIsEditing(true);
+  };
+  const handleCancelEdit = (event: MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation();
+    setEditForm({
+      title: report.title ?? "",
+      body: report.body ?? "",
+    });
+    setEditError(null);
+    setIsEditing(false);
+  };
+  const handleEditableAreaClick = (event: MouseEvent<HTMLElement>) => {
     event.stopPropagation();
   };
+  const handleSaveClick = async (event: MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation();
+    if (isSaving || report.status !== "PENDING") {
+      return;
+    }
+
+    const endpoint = `${contentEndpoint}/${report.id}`;
+    setIsSaving(true);
+    setEditError(null);
+
+    try {
+      const headers: Record<string, string> = {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      };
+      const csrfToken = getCookieValue("XSRF-TOKEN");
+      if (csrfToken) {
+        headers["X-XSRF-TOKEN"] = csrfToken;
+      }
+
+      const response = await fetch(endpoint, {
+        method: "PUT",
+        credentials: "include",
+        headers,
+        body: JSON.stringify({
+          title: editForm.title,
+          body: editForm.body,
+        }),
+      });
+
+      const contentType = response.headers.get("content-type") || "unknown";
+
+      if (!response.ok) {
+        throw new Error(`콘텐츠 수정 실패 (${response.status}, ${contentType})`);
+      }
+
+      setIsEditing(false);
+      onRefresh();
+    } catch (error) {
+      console.error("[Reports] failed to update content", endpoint, error);
+      setEditError(error instanceof Error ? error.message : "콘텐츠를 수정하지 못했습니다.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+  const canModerate = report.status === "PENDING";
+  const statusButtonsDisabled = isStatusUpdating || isSaving;
+  const titleInputId = `report-title-${report.id}`;
+  const bodyInputId = `report-body-${report.id}`;
+  const currentBodyLength = isEditing ? editForm.body.length : report.body.length;
+  const adjustBodyTextareaHeight = useCallback(() => {
+    const textarea = bodyTextareaRef.current;
+    if (!textarea) {
+      return;
+    }
+    textarea.style.height = "auto";
+    const nextHeight = Math.max(textarea.scrollHeight, MIN_BODY_TEXTAREA_HEIGHT);
+    textarea.style.height = `${nextHeight}px`;
+  }, []);
+
+  useEffect(() => {
+    setEditForm({
+      title: report.title ?? "",
+      body: report.body ?? "",
+    });
+    setIsEditing(false);
+    setEditError(null);
+    setIsSaving(false);
+  }, [report.id, report.title, report.body]);
+
+  useEffect(() => {
+    if (!canModerate && isEditing) {
+      setIsEditing(false);
+    }
+  }, [canModerate, isEditing]);
+
+  useEffect(() => {
+    if (!isEditing) {
+      return;
+    }
+    adjustBodyTextareaHeight();
+  }, [isEditing, editForm.body, adjustBodyTextareaHeight]);
 
   return (
     <Card
-      className={`border border-border shadow-sm cursor-pointer transition-colors ${isExpanded ? "ring-1 ring-primary/40 bg-muted/30" : "hover:border-primary/40"}`}
+      className={`border border-border shadow-sm transition-colors ${
+        isEditing ? "cursor-default" : "cursor-pointer"
+      } ${isExpanded ? "ring-1 ring-primary/40" : "hover:border-primary/40"}`}
       tabIndex={0}
       aria-expanded={isExpanded}
-      onClick={onToggle}
+      onClick={handleCardClick}
       onKeyDown={handleCardKeyDown}
     >
       <CardHeader className="space-y-3">
         <div>
-          <p className="text-sm text-muted-foreground">타이틀</p>
+          {/*<p className="text-sm text-muted-foreground">타이틀</p>*/}
           <div className="mt-1 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <h2 className="text-xl font-semibold leading-tight">{report.title}</h2>
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <span>상태</span>
-              <Badge variant="outline" className={status.badgeClass}>
-                {status.label}
-              </Badge>
-            </div>
+            {isEditing ? (
+              <div className="w-full md:max-w-xl mt-1 space-y-2">
+                <Label htmlFor={titleInputId} className="sr-only">
+                  타이틀
+                </Label>
+                <Input
+                  id={titleInputId}
+                  value={editForm.title}
+                  onChange={(event) =>
+                    setEditForm((prev) => ({
+                      ...prev,
+                      title: event.target.value,
+                    }))
+                  }
+                  onClick={handleEditableAreaClick}
+                  autoFocus
+                />
+              </div>
+            ) : (
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="text-xl font-semibold leading-tight">{report.title}</h2>
+                <Badge variant="outline" className={status.badgeClass}>
+                  {status.label}
+                </Badge>
+              </div>
+            )}
+            {/*{isEditing && (*/}
+            {/*  <Badge variant="outline" className={status.badgeClass}>*/}
+            {/*    {status.label}*/}
+            {/*  </Badge>*/}
+            {/*)}*/}
           </div>
         </div>
       </CardHeader>
 
       <CardContent className="space-y-4">
         <div>
-          <p className="text-sm text-muted-foreground">내용</p>
-          <p
-            className={`mt-1 text-sm leading-relaxed text-foreground ${isExpanded ? "whitespace-pre-line" : ""}`}
-          >
-            {isExpanded ? report.body : truncateText(report.body)}
-          </p>
+          {/*<p className="text-sm text-muted-foreground">내용</p>*/}
+          {isEditing ? (
+            <div className="mt-1 space-y-2">
+              <Label htmlFor={bodyInputId} className="sr-only">
+                내용
+              </Label>
+              <Textarea
+                id={bodyInputId}
+                rows={15}
+                value={editForm.body}
+                onChange={(event) =>
+                  setEditForm((prev) => ({
+                    ...prev,
+                    body: event.target.value,
+                  }))
+                }
+                onClick={handleEditableAreaClick}
+                className="min-h-[240px]"
+              />
+            </div>
+          ) : (
+            <p className="mt-1 text-sm leading-relaxed text-foreground">
+              {isExpanded ? renderTextWithLineBreaks(report.body) : truncateText(report.body)}
+            </p>
+          )}
         </div>
         <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
-          <span>{report.body.length.toLocaleString()}자 (body 글자수)</span>
-          <span>날짜 {formatDateTime(report.createdAt)}</span>
+          {isEditing ? (
+            <span className="ml-auto">{currentBodyLength.toLocaleString()}자</span>
+          ) : (
+            <>
+              <span>{currentBodyLength.toLocaleString()}자</span>
+              <span>{formatDateTime(report.createdAt)}</span>
+            </>
+          )}
         </div>
       </CardContent>
 
-      <CardFooter className="flex flex-wrap justify-end gap-2">
-        <Button variant="outline" size="sm" onClick={handlePreviewClick}>
-          미리보기
-        </Button>
-        <Button size="sm" onClick={stopPropagation}>
-          승인
-        </Button>
-        <Button variant="destructive" size="sm" onClick={stopPropagation}>
-          반려
-        </Button>
-        <Button variant="secondary" size="sm" onClick={stopPropagation}>
-          수정
-        </Button>
-      </CardFooter>
+      {canModerate && (
+        <CardFooter className="flex flex-wrap items-center justify-between gap-3">
+          {!isEditing && (
+            <div className="flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                onClick={(event) => handleStatusButtonClick(event, "APPROVED")}
+                disabled={statusButtonsDisabled}
+              >
+                승인
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={(event) => handleStatusButtonClick(event, "REJECTED")}
+                disabled={statusButtonsDisabled}
+              >
+                반려
+              </Button>
+            </div>
+          )}
+          <div className="flex flex-wrap gap-2 ml-auto">
+            {isEditing ? (
+              <>
+                <Button variant="secondary" size="sm" onClick={handleCancelEdit} disabled={isSaving}>
+                  취소
+                </Button>
+                <Button size="sm" onClick={handleSaveClick} disabled={isSaving}>
+                  {isSaving ? "저장 중..." : "저장"}
+                </Button>
+              </>
+            ) : (
+              <Button variant="secondary" size="sm" onClick={handleEditClick}>
+                수정
+              </Button>
+            )}
+          </div>
+          {editError && (
+            <p className="w-full text-sm text-destructive">{editError}</p>
+          )}
+        </CardFooter>
+      )}
     </Card>
-  );
-}
-
-function PreviewModal({
-                        report,
-                        onClose,
-                      }: {
-  report: ReportItem | null;
-  onClose: () => void;
-}) {
-  if (!report || typeof document === "undefined") {
-    return null;
-  }
-
-  return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/50" onClick={onClose}/>
-      <div
-        className="relative z-10 max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-lg border border-border bg-background p-6 shadow-2xl">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex flex-wrap items-center gap-3">
-            <h2 className="text-2xl font-semibold text-foreground">{report.title}</h2>
-            <Badge variant="outline" className={STATUS_META[report.status].badgeClass}>
-              {STATUS_META[report.status].label}
-            </Badge>
-          </div>
-          <Button variant="ghost" size="sm" onClick={onClose}>
-            닫기
-          </Button>
-        </div>
-
-        <p className="mt-2 text-sm text-muted-foreground">
-          생성 유형: {report.generationType} · 키워드: {report.keyword ?? "-"}
-        </p>
-
-        <div className="mt-4 rounded-md border bg-muted/40 p-4 text-sm">
-          <dl className="grid gap-2 sm:grid-cols-2">
-            <div className="flex flex-col">
-              <dt className="text-muted-foreground">콘텐츠 ID</dt>
-              <dd className="font-medium text-foreground">{report.id}</dd>
-            </div>
-            <div className="flex flex-col">
-              <dt className="text-muted-foreground">작업 ID</dt>
-              <dd className="font-medium text-foreground">{report.jobId}</dd>
-            </div>
-            <div className="flex flex-col">
-              <dt className="text-muted-foreground">업로더 ID</dt>
-              <dd className="font-medium text-foreground">{report.userId}</dd>
-            </div>
-            <div className="flex flex-col">
-              <dt className="text-muted-foreground">채널 ID</dt>
-              <dd className="font-medium text-foreground">{report.uploadChannelId}</dd>
-            </div>
-          </dl>
-        </div>
-
-        <div className="mt-4 space-y-3 text-sm">
-          <div>
-            <p className="font-medium text-foreground">본문</p>
-            <p className="mt-1 whitespace-pre-line leading-relaxed text-muted-foreground">
-              {report.body}
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-4 text-muted-foreground">
-            <span>본문 길이: {report.body.length.toLocaleString()}자</span>
-            <span>생성일: {formatDateTime(report.createdAt)}</span>
-            <span>업데이트: {formatDateTime(report.updatedAt)}</span>
-          </div>
-        </div>
-
-        {report.link && (
-          <a
-            href={report.link}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mt-4 inline-flex text-sm font-medium text-primary underline"
-          >
-            원본 링크 열기
-          </a>
-        )}
-      </div>
-    </div>,
-    document.body
   );
 }
 
 function truncateText(text: string, limit = TEXT_LIMIT) {
   return text.length <= limit ? text : `${text.slice(0, limit)}...`;
+}
+
+function renderTextWithLineBreaks(text: string) {
+  const segments = text.split(/\n/g);
+  return segments.map((segment, index) => (
+    <Fragment key={`segment-${index}`}>
+      {segment}
+      {index < segments.length - 1 ? <br /> : null}
+    </Fragment>
+  ));
+}
+
+function getCookieValue(name: string) {
+  if (typeof document === "undefined") {
+    return null;
+  }
+
+  const pairs = document.cookie.split(";");
+  for (const pair of pairs) {
+    const [cookieName, ...rest] = pair.trim().split("=");
+    if (cookieName === name) {
+      return rest.join("=");
+    }
+  }
+
+  return null;
 }
 
 function formatDateTime(value: string) {

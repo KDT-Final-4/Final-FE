@@ -58,6 +58,27 @@ export default defineConfig(({ mode }) => {
     build: {
       target: 'esnext',
       outDir: 'build',
+      chunkSizeWarningLimit: 1000,
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            'react-vendor': ['react', 'react-dom', 'react-router-dom'],
+            'radix-ui': [
+              '@radix-ui/react-accordion',
+              '@radix-ui/react-alert-dialog',
+              '@radix-ui/react-dialog',
+              '@radix-ui/react-dropdown-menu',
+              '@radix-ui/react-popover',
+              '@radix-ui/react-select',
+              '@radix-ui/react-tabs',
+              '@radix-ui/react-tooltip',
+            ],
+            charts: ['recharts'],
+            forms: ['react-hook-form', 'react-day-picker'],
+            utils: ['lucide-react', 'clsx', 'tailwind-merge', 'class-variance-authority'],
+          },
+        },
+      },
     },
     server: {
       port: 3000,

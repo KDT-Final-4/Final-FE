@@ -64,9 +64,11 @@ export function ConsumptionChart({ selectedDay: _selectedDay, selectedDevice: _s
       setError(null);
 
       try {
-        const response = await fetch(endpoint, {
-          credentials: "include",
-          signal: controller.signal,
+        const { getApiUrl, getApiOptions } = await import("../utils/api");
+        const response = await fetch(getApiUrl(endpoint), {
+          ...getApiOptions({
+            signal: controller.signal,
+          }),
         });
 
         const contentType = response.headers.get("content-type") || "unknown";

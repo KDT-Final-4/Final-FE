@@ -89,7 +89,8 @@ export function Sidebar() {
 
     const fetchUser = async () => {
       try {
-        const response = await fetch("/api/user/me", { credentials: "include" });
+        const { getApiUrl, getApiOptions } = await import("../utils/api");
+        const response = await fetch(getApiUrl("/api/user/me"), getApiOptions());
         const contentType = response.headers.get("content-type") || "";
         if (!contentType.includes("application/json")) {
           console.error("[Sidebar] unexpected content-type for /api/user/me", contentType);

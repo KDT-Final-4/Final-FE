@@ -98,7 +98,8 @@ export function ConfigurationPage() {
       setLlmLoading(true);
       setLlmError(null);
       try {
-        const response = await fetch("/api/setting/llm");
+        const { getApiUrl, getApiOptions } = await import("../../utils/api");
+        const response = await fetch(getApiUrl("/api/setting/llm"), getApiOptions());
         if (!response.ok) throw new Error("LLM 설정을 불러오지 못했습니다.");
         const data = await response.json();
         const provider = normalizeProvider(data.name);
@@ -130,7 +131,8 @@ export function ConfigurationPage() {
       setScheduleLoading(true);
       setScheduleError(null);
       try {
-        const response = await fetch("/api/setting/schedule");
+        const { getApiUrl, getApiOptions } = await import("../../utils/api");
+        const response = await fetch(getApiUrl("/api/setting/schedule"), getApiOptions());
         if (!response.ok) throw new Error("스케줄 설정을 불러오지 못했습니다.");
         const data = await response.json();
         setSchedule({
@@ -155,7 +157,8 @@ export function ConfigurationPage() {
       setNotificationLoading(true);
       setNotificationError(null);
       try {
-        const response = await fetch("/api/setting/notification");
+        const { getApiUrl, getApiOptions } = await import("../../utils/api");
+        const response = await fetch(getApiUrl("/api/setting/notification"), getApiOptions());
         if (!response.ok) throw new Error("알림 설정을 불러오지 못했습니다.");
         const data = await response.json();
         setNotification({
@@ -182,18 +185,20 @@ export function ConfigurationPage() {
     setLlmError(null);
     try {
       const method = llmSetting.id ? "PUT" : "POST";
-      const response = await fetch("/api/setting/llm", {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: llmSetting.name,
-          modelName: llmSetting.modelName,
-          apiKey: llmSetting.apiKey,
-          status: llmSetting.status,
-          maxTokens: llmSetting.maxTokens,
-          temperature: llmSetting.temperature,
-          prompt: llmSetting.prompt,
-          generationType: llmSetting.generationType || "AUTO",
+      const { getApiUrl, getApiOptions } = await import("../../utils/api");
+      const response = await fetch(getApiUrl("/api/setting/llm"), {
+        ...getApiOptions({
+          method,
+          body: JSON.stringify({
+            name: llmSetting.name,
+            modelName: llmSetting.modelName,
+            apiKey: llmSetting.apiKey,
+            status: llmSetting.status,
+            maxTokens: llmSetting.maxTokens,
+            temperature: llmSetting.temperature,
+            prompt: llmSetting.prompt,
+            generationType: llmSetting.generationType || "AUTO",
+          }),
         }),
       });
       if (!response.ok) throw new Error("LLM 설정 저장에 실패했습니다.");
@@ -227,13 +232,15 @@ export function ConfigurationPage() {
     setScheduleSaved(false);
     setScheduleError(null);
     try {
-      const response = await fetch(`/api/setting/schedule/${schedule.id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          maxDailyRuns: schedule.maxDailyRuns,
-          retryOnFail: schedule.retryOnFail,
-          isRun: schedule.isRun,
+      const { getApiUrl, getApiOptions } = await import("../../utils/api");
+      const response = await fetch(getApiUrl(`/api/setting/schedule/${schedule.id}`), {
+        ...getApiOptions({
+          method: "PUT",
+          body: JSON.stringify({
+            maxDailyRuns: schedule.maxDailyRuns,
+            retryOnFail: schedule.retryOnFail,
+            isRun: schedule.isRun,
+          }),
         }),
       });
       if (!response.ok) throw new Error("스케줄 설정 저장에 실패했습니다.");
@@ -262,14 +269,16 @@ export function ConfigurationPage() {
     setNotificationSaved(false);
     setNotificationError(null);
     try {
-      const response = await fetch(`/api/setting/notification/${notification.id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          channelId: notification.channelId,
-          webhookUrl: notification.webhookUrl ?? "",
-          apiToken: notification.apiToken ?? "",
-          isActive: notification.isActive,
+      const { getApiUrl, getApiOptions } = await import("../../utils/api");
+      const response = await fetch(getApiUrl(`/api/setting/notification/${notification.id}`), {
+        ...getApiOptions({
+          method: "PUT",
+          body: JSON.stringify({
+            channelId: notification.channelId,
+            webhookUrl: notification.webhookUrl ?? "",
+            apiToken: notification.apiToken ?? "",
+            isActive: notification.isActive,
+          }),
         }),
       });
       if (!response.ok) throw new Error("알림 설정 저장에 실패했습니다.");

@@ -88,7 +88,8 @@ export function SchedulePage() {
     setIsListLoading(true);
     setError(null);
     try {
-      const response = await fetch("/api/schedule", { method: "GET" });
+      const { getApiUrl, getApiOptions } = await import("../../utils/api");
+      const response = await fetch(getApiUrl("/api/schedule"), getApiOptions({ method: "GET" }));
       if (!response.ok) {
         throw new Error(`스케줄 목록을 불러오지 못했습니다. (HTTP ${response.status})`);
       }
@@ -111,7 +112,8 @@ export function SchedulePage() {
     setIsLoading(true);
     setError(null);
     try {
-      const response = await fetch(`/api/schedule/${id}`, { method: "GET" });
+      const { getApiUrl, getApiOptions } = await import("../../utils/api");
+      const response = await fetch(getApiUrl(`/api/schedule/${id}`), getApiOptions({ method: "GET" }));
       if (!response.ok) {
         throw new Error(`스케줄을 불러오지 못했습니다. (HTTP ${response.status})`);
       }
@@ -167,13 +169,15 @@ export function SchedulePage() {
     setError(null);
     setMessage(null);
     try {
-      const response = await fetch("/api/schedule", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: createForm.title.trim(),
-          startTime: parsedStart.toISOString(),
-          repeatInterval: createForm.repeatInterval,
+      const { getApiUrl, getApiOptions } = await import("../../utils/api");
+      const response = await fetch(getApiUrl("/api/schedule"), {
+        ...getApiOptions({
+          method: "POST",
+          body: JSON.stringify({
+            title: createForm.title.trim(),
+            startTime: parsedStart.toISOString(),
+            repeatInterval: createForm.repeatInterval,
+          }),
         }),
       });
       if (!response.ok) {
@@ -224,13 +228,15 @@ export function SchedulePage() {
     setError(null);
     setMessage(null);
     try {
-      const response = await fetch(`/api/schedule/${activeScheduleId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: form.title.trim(),
-          startTime: parsedStart.toISOString(),
-          repeatInterval: form.repeatInterval,
+      const { getApiUrl, getApiOptions } = await import("../../utils/api");
+      const response = await fetch(getApiUrl(`/api/schedule/${activeScheduleId}`), {
+        ...getApiOptions({
+          method: "PUT",
+          body: JSON.stringify({
+            title: form.title.trim(),
+            startTime: parsedStart.toISOString(),
+            repeatInterval: form.repeatInterval,
+          }),
         }),
       });
       if (!response.ok) {
@@ -266,8 +272,11 @@ export function SchedulePage() {
     setError(null);
     setMessage(null);
     try {
-      const response = await fetch(`/api/schedule/active/${id}`, {
-        method: "PUT",
+      const { getApiUrl, getApiOptions } = await import("../../utils/api");
+      const response = await fetch(getApiUrl(`/api/schedule/active/${id}`), {
+        ...getApiOptions({
+          method: "PUT",
+        }),
       });
       if (!response.ok) {
         throw new Error(`스케줄 상태 변경에 실패했습니다. (HTTP ${response.status})`);
@@ -292,7 +301,8 @@ export function SchedulePage() {
     setError(null);
     setMessage(null);
     try {
-      const response = await fetch(`/api/schedule/${activeScheduleId}`, { method: "DELETE" });
+      const { getApiUrl, getApiOptions } = await import("../../utils/api");
+      const response = await fetch(getApiUrl(`/api/schedule/${activeScheduleId}`), getApiOptions({ method: "DELETE" }));
       if (!response.ok) {
         throw new Error(`스케줄 삭제에 실패했습니다. (HTTP ${response.status})`);
       }

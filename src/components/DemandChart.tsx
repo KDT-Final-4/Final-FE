@@ -101,10 +101,12 @@ export function DemandChart({ selectedDay, dateRange, onDateRangeChange }: Deman
       const endpoint = `/api/dashboard/daily?${query.toString()}`;
 
       try {
+        const { getApiUrl, getApiOptions } = await import("../utils/api");
         console.log("[DemandChart] fetching daily clicks from", endpoint);
-        const response = await fetch(endpoint, {
-          credentials: "include",
-          signal: controller.signal,
+        const response = await fetch(getApiUrl(endpoint), {
+          ...getApiOptions({
+            signal: controller.signal,
+          }),
         });
 
         const contentType = response.headers.get("content-type") || "unknown";

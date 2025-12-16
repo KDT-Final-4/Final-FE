@@ -225,7 +225,8 @@ export function LogsPage() {
   const loadCounts = useCallback(async () => {
     setIsLoadingCounts(true);
     try {
-      const response = await fetch("/api/log/count", { credentials: "include" });
+      const { getApiUrl, getApiOptions } = await import("../../utils/api");
+      const response = await fetch(getApiUrl("/api/log/count"), getApiOptions());
       const contentType = response.headers.get("content-type") || "";
       if (!response.ok || !contentType.includes("application/json")) {
         throw new Error("로그 카운트를 불러오지 못했습니다.");
@@ -254,8 +255,9 @@ export function LogsPage() {
       if (appliedSearch) params.set("search", appliedSearch);
       if (logTypeFilter !== "all") params.set("logType", logTypeFilter);
 
-      const response = await fetch(`/api/log?${params.toString()}`, {
-        credentials: "include",
+      const { getApiUrl, getApiOptions } = await import("../../utils/api");
+      const response = await fetch(`${getApiUrl("/api/log")}?${params.toString()}`, {
+        ...getApiOptions(),
       });
       const contentType = response.headers.get("content-type") || "";
       if (!response.ok || !contentType.includes("application/json")) {

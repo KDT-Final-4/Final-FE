@@ -305,8 +305,9 @@ async function fetchTrendKeywords({ page, size, snsType }: FetchTrendParams): Pr
     params.set("snsType", snsType);
   }
 
-  const response = await fetch(`${sanitizedBase}/trend?${params.toString()}`, {
-    credentials: "include",
+  const { getApiUrl, getApiOptions } = await import("../../utils/api");
+  const response = await fetch(`${getApiUrl(`${sanitizedBase}/trend`)}?${params.toString()}`, {
+    ...getApiOptions(),
   });
 
   if (!response.ok) {

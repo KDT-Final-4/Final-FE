@@ -7,6 +7,7 @@ import { Input } from "../../components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../components/ui/table";
 import { KpiCard } from "../../components/KpiCard";
+import { apiFetch } from "../../apiClient";
 
 type LogType = "INFO" | "ERROR" | "WARN";
 
@@ -225,7 +226,7 @@ export function LogsPage() {
   const loadCounts = useCallback(async () => {
     setIsLoadingCounts(true);
     try {
-      const response = await fetch("/api/log/count", { credentials: "include" });
+      const response = await apiFetch("/api/log/count", { credentials: "include" });
       const contentType = response.headers.get("content-type") || "";
       if (!response.ok || !contentType.includes("application/json")) {
         throw new Error("로그 카운트를 불러오지 못했습니다.");
@@ -254,7 +255,7 @@ export function LogsPage() {
       if (appliedSearch) params.set("search", appliedSearch);
       if (logTypeFilter !== "all") params.set("logType", logTypeFilter);
 
-      const response = await fetch(`/api/log?${params.toString()}`, {
+      const response = await apiFetch(`/api/log?${params.toString()}`, {
         credentials: "include",
       });
       const contentType = response.headers.get("content-type") || "";

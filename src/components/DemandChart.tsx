@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
+import { apiFetch } from "../apiClient";
 
 interface DemandChartProps {
   selectedDay: string;
@@ -102,7 +103,7 @@ export function DemandChart({ selectedDay, dateRange, onDateRangeChange }: Deman
 
       try {
         console.log("[DemandChart] fetching daily clicks from", endpoint);
-        const response = await fetch(endpoint, {
+        const response = await apiFetch(endpoint, {
           credentials: "include",
           signal: controller.signal,
         });

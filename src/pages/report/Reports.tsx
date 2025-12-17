@@ -2,6 +2,7 @@ import {Fragment, type KeyboardEvent, type MouseEvent, useCallback, useEffect, u
 import {Ban, CheckCircle2, Clock3, type LucideIcon} from "lucide-react";
 import {Badge} from "@/components/ui/badge";
 import {Button} from "@/components/ui/button";
+import { apiFetch } from "@/apiClient";
 import {
   Card,
   CardContent,
@@ -178,7 +179,7 @@ export function ReportsPage() {
           }));
 
         console.log("[Reports] fetching content from", endpoint);
-        const response = await fetch(endpoint, {
+        const response = await apiFetch(endpoint, {
           credentials: "include",
           headers: {
             Accept: "application/json",
@@ -304,7 +305,7 @@ export function ReportsPage() {
           headers["X-XSRF-TOKEN"] = csrfToken;
         }
 
-        const response = await fetch(endpoint, {
+        const response = await apiFetch(endpoint, {
           method: "PATCH",
           credentials: "include",
           headers,
@@ -631,7 +632,7 @@ function ReportCard({
         headers["X-XSRF-TOKEN"] = csrfToken;
       }
 
-      const response = await fetch(endpoint, {
+      const response = await apiFetch(endpoint, {
         method: "PUT",
         credentials: "include",
         headers,

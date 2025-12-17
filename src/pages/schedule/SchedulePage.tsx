@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { Separator } from "../../components/ui/separator";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../components/ui/table";
 import { Switch } from "../../components/ui/switch";
+import { apiFetch } from "../../apiClient";
 
 type ScheduleResponse = {
   id: number;
@@ -88,7 +89,7 @@ export function SchedulePage() {
     setIsListLoading(true);
     setError(null);
     try {
-      const response = await fetch("/api/schedule", { method: "GET" });
+      const response = await apiFetch("/api/schedule", { method: "GET" });
       if (!response.ok) {
         throw new Error(`스케줄 목록을 불러오지 못했습니다. (HTTP ${response.status})`);
       }
@@ -111,7 +112,7 @@ export function SchedulePage() {
     setIsLoading(true);
     setError(null);
     try {
-      const response = await fetch(`/api/schedule/${id}`, { method: "GET" });
+      const response = await apiFetch(`/api/schedule/${id}`, { method: "GET" });
       if (!response.ok) {
         throw new Error(`스케줄을 불러오지 못했습니다. (HTTP ${response.status})`);
       }
@@ -167,7 +168,7 @@ export function SchedulePage() {
     setError(null);
     setMessage(null);
     try {
-      const response = await fetch("/api/schedule", {
+      const response = await apiFetch("/api/schedule", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -224,7 +225,7 @@ export function SchedulePage() {
     setError(null);
     setMessage(null);
     try {
-      const response = await fetch(`/api/schedule/${activeScheduleId}`, {
+      const response = await apiFetch(`/api/schedule/${activeScheduleId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -266,7 +267,7 @@ export function SchedulePage() {
     setError(null);
     setMessage(null);
     try {
-      const response = await fetch(`/api/schedule/active/${id}`, {
+      const response = await apiFetch(`/api/schedule/active/${id}`, {
         method: "PUT",
       });
       if (!response.ok) {
@@ -292,7 +293,7 @@ export function SchedulePage() {
     setError(null);
     setMessage(null);
     try {
-      const response = await fetch(`/api/schedule/${activeScheduleId}`, { method: "DELETE" });
+      const response = await apiFetch(`/api/schedule/${activeScheduleId}`, { method: "DELETE" });
       if (!response.ok) {
         throw new Error(`스케줄 삭제에 실패했습니다. (HTTP ${response.status})`);
       }

@@ -137,8 +137,8 @@ export function Dashboard() {
         console.log("[Dashboard] fetching contents count from", contentsCountEndpoint);
 
         const [statusResponse, contentsCountResponse] = await Promise.all([
-          fetch(statusEndpoint, { credentials: "include" }),
-          fetch(contentsCountEndpoint, { credentials: "include" }),
+          apiFetch(statusEndpoint),
+          apiFetch(contentsCountEndpoint),
         ]);
 
         const statusContentType = statusResponse.headers.get("content-type") || "unknown";

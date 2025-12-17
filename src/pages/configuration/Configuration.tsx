@@ -8,6 +8,7 @@ import { Textarea } from "../../components/ui/textarea";
 import { Button } from "../../components/ui/button";
 import { Separator } from "../../components/ui/separator";
 import { Car, Settings } from "lucide-react";
+import { apiFetch } from "../../apiClient";
 
 type LlmSetting = {
   id: number | null;
@@ -136,7 +137,7 @@ export function ConfigurationPage() {
       setLlmLoading(true);
       setLlmError(null);
       try {
-        const response = await fetch("/api/setting/llm");
+        const response = await apiFetch("/api/setting/llm");
         if (!response.ok) throw new Error("LLM 설정을 불러오지 못했습니다.");
         const data = await response.json();
         const provider = normalizeProvider(data.name);
@@ -168,7 +169,7 @@ export function ConfigurationPage() {
       setScheduleLoading(true);
       setScheduleError(null);
       try {
-        const response = await fetch("/api/setting/schedule");
+        const response = await apiFetch("/api/setting/schedule");
         if (!response.ok) throw new Error("스케줄 설정을 불러오지 못했습니다.");
         const data = await response.json();
         setSchedule({
@@ -193,7 +194,7 @@ export function ConfigurationPage() {
       setNotificationLoading(true);
       setNotificationError(null);
       try {
-        const response = await fetch("/api/setting/notification");
+        const response = await apiFetch("/api/setting/notification");
         if (!response.ok) throw new Error("알림 설정을 불러오지 못했습니다.");
         const data = await response.json();
         setNotification({
@@ -221,7 +222,7 @@ export function ConfigurationPage() {
       setUploadError(null);
       setUploadErrorX(null);
       try {
-        const response = await fetch("/api/setting/uploadChannel");
+        const response = await apiFetch("/api/setting/uploadChannel");
         if (!response.ok) throw new Error("업로드 채널 설정을 불러오지 못했습니다.");
         const data = await response.json();
         const channels = Array.isArray(data) ? data : [data];
@@ -281,7 +282,7 @@ export function ConfigurationPage() {
     setLlmError(null);
     try {
       const method = llmSetting.id ? "PUT" : "POST";
-      const response = await fetch("/api/setting/llm", {
+      const response = await apiFetch("/api/setting/llm", {
         method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -326,7 +327,7 @@ export function ConfigurationPage() {
     setScheduleSaved(false);
     setScheduleError(null);
     try {
-      const response = await fetch(`/api/setting/schedule/${schedule.id}`, {
+      const response = await apiFetch(`/api/setting/schedule/${schedule.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -361,7 +362,7 @@ export function ConfigurationPage() {
     setNotificationSaved(false);
     setNotificationError(null);
     try {
-      const response = await fetch(`/api/setting/notification/${notification.id}`, {
+      const response = await apiFetch(`/api/setting/notification/${notification.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -399,7 +400,7 @@ export function ConfigurationPage() {
     setUploadSaved(false);
     setUploadError(null);
     try {
-      const response = await fetch(`/api/setting/uploadChannel/${targetId}`, {
+      const response = await apiFetch(`/api/setting/uploadChannel/${targetId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -441,7 +442,7 @@ export function ConfigurationPage() {
     setUploadSavedX(false);
     setUploadErrorX(null);
     try {
-      const response = await fetch(`/api/setting/uploadChannel/${targetId}`, {
+      const response = await apiFetch(`/api/setting/uploadChannel/${targetId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

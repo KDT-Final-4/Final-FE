@@ -39,6 +39,16 @@ type NotificationSetting = {
   isActive: boolean;
 };
 
+type UploadChannelSetting = {
+  id: number | null;
+  userId: number | null;
+  name: string;
+  apiKey: string;
+  clientId: string;
+  clientPw: string;
+  status: boolean;
+};
+
 const MODEL_OPTIONS: Record<string, string[]> = {
   OpenAI: ["gpt-4o-mini", "gpt-4o", "gpt-5", "gpt-3.5-turbo"],
   Upstage: ["solar-1-mini-chat", "solar-1-embed", "solar-1-mini", "solar-1"],
@@ -92,6 +102,20 @@ export function ConfigurationPage() {
   const [notificationSaving, setNotificationSaving] = useState(false);
   const [notificationError, setNotificationError] = useState<string | null>(null);
   const [notificationSaved, setNotificationSaved] = useState(false);
+
+  const [uploadChannel, setUploadChannel] = useState<UploadChannelSetting>({
+    id: 1,
+    userId: null,
+    name: "NAVER",
+    apiKey: "",
+    clientId: "",
+    clientPw: "",
+    status: true,
+  });
+  const [uploadLoading, setUploadLoading] = useState(false);
+  const [uploadSaving, setUploadSaving] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [uploadSaved, setUploadSaved] = useState(false);
 
   useEffect(() => {
     const fetchLlmSetting = async () => {
@@ -174,6 +198,33 @@ export function ConfigurationPage() {
     };
 
     fetchNotificationSetting();
+  }, []);
+
+  useEffect(() => {
+    const fetchUploadChannel = async () => {
+      setUploadLoading(true);
+      setUploadError(null);
+      try {
+        const response = await fetch("/api/setting/uploadChannel/1");
+        if (!response.ok) throw new Error("업로드 채널 설정을 불러오지 못했습니다.");
+        const data = await response.json();
+        setUploadChannel({
+          id: 1,
+          userId: data.userId ?? null,
+          name: "NAVER",
+          apiKey: data.apiKey ?? "",
+          clientId: data.clientId ?? "",
+          clientPw: data.clientPw ?? "",
+          status: Boolean(data.status),
+        });
+      } catch (error) {
+        setUploadError(error instanceof Error ? error.message : "업로드 채널 설정을 불러오지 못했습니다.");
+      } finally {
+        setUploadLoading(false);
+      }
+    };
+
+    fetchUploadChannel();
   }, []);
 
   const saveLlmSetting = async () => {
@@ -290,6 +341,44 @@ export function ConfigurationPage() {
     }
   };
 
+  const saveUploadChannelSetting = async () => {
+    const targetId = 1;
+    setUploadSaving(true);
+    setUploadSaved(false);
+    setUploadError(null);
+    try {
+      const response = await fetch(`/api/setting/uploadChannel/${targetId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: uploadChannel.userId,
+          name: uploadChannel.name,
+          apiKey: uploadChannel.apiKey,
+          clientId: uploadChannel.clientId,
+          clientPw: uploadChannel.clientPw,
+          status: uploadChannel.status,
+        }),
+      });
+      if (!response.ok) throw new Error("업로드 채널 설정 저장에 실패했습니다.");
+      const data = await response.json();
+      setUploadChannel((prev) => ({
+        ...prev,
+        id: 1,
+        userId: Number.isFinite(Number(data.userId)) ? Number(data.userId) : prev.userId,
+        name: "NAVER",
+        apiKey: data.apiKey ?? prev.apiKey,
+        clientId: data.clientId ?? prev.clientId,
+        clientPw: data.clientPw ?? prev.clientPw,
+        status: "status" in data ? Boolean(data.status) : prev.status,
+      }));
+      setUploadSaved(true);
+    } catch (error) {
+      setUploadError(error instanceof Error ? error.message : "업로드 채널 설정 저장에 실패했습니다.");
+    } finally {
+      setUploadSaving(false);
+    }
+  };
+
   const providerKey = MODEL_OPTIONS[llmSetting.name] ? llmSetting.name : "OpenAI";
   const modelOptions = MODEL_OPTIONS[providerKey] || [];
   const isEmailChannel = notification.channelId === 1;
@@ -310,8 +399,9 @@ export function ConfigurationPage() {
       <Tabs defaultValue="llm" className="w-full">
           <TabsList className="bg-muted">
             <TabsTrigger value="llm">LLM</TabsTrigger>
-            <TabsTrigger value="schedule">Schedule</TabsTrigger>
-            <TabsTrigger value="notification">Notification</TabsTrigger>
+            <TabsTrigger value="schedule">스케쥴</TabsTrigger>
+            <TabsTrigger value="notification">알림</TabsTrigger>
+            <TabsTrigger value="login">로그인</TabsTrigger>
           </TabsList>
 
 
@@ -632,6 +722,56 @@ export function ConfigurationPage() {
 
               <Button className="w-full" onClick={saveNotificationSetting} disabled={notificationSaving || notificationLoading || notification.id === null}>
                 {notificationSaving ? "저장 중..." : "알림 설정 저장"}
+              </Button>
+            </CardContent>
+          </Card>
+        </TabsContent>
+        {/* login Setting */}
+        <TabsContent value="login" className="pt-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>업로드 채널 설정</CardTitle>
+              <CardDescription>네이버 계정 정보를 입력해 업로드 채널을 설정합니다.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="upload-name">채널 이름</Label>
+                <Input
+                  id="upload-name"
+                  value="NAVER"
+                  disabled
+                  className="bg-muted text-muted-foreground cursor-not-allowed"
+                  placeholder="NAVER"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="upload-clientId">네이버 Id</Label>
+                <Input
+                  id="upload-clientId"
+                  value={uploadChannel.clientId}
+                  onChange={(e) => setUploadChannel((prev) => ({ ...prev, clientId: e.target.value }))}
+                  placeholder="네이버 아이디를 입력하세요"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="upload-clientPw">네이버 Pwd</Label>
+                <Input
+                  id="upload-clientPw"
+                  type="password"
+                  value={uploadChannel.clientPw}
+                  onChange={(e) => setUploadChannel((prev) => ({ ...prev, clientPw: e.target.value }))}
+                  placeholder="••••••••"
+                />
+              </div>
+
+              {uploadError && <p className="text-sm text-destructive">{uploadError}</p>}
+              {uploadLoading && <p className="text-sm text-muted-foreground">업로드 채널 설정을 불러오는 중...</p>}
+              {uploadSaved && !uploadError && <p className="text-sm text-emerald-600">업로드 채널 설정이 저장되었습니다.</p>}
+
+              <Button className="w-full" onClick={saveUploadChannelSetting} disabled={uploadSaving || uploadLoading}>
+                {uploadSaving ? "저장 중..." : "업로드 채널 저장"}
               </Button>
             </CardContent>
           </Card>

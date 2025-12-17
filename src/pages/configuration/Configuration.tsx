@@ -746,6 +746,17 @@ export function ConfigurationPage() {
               </div>
 
               <div className="space-y-2">
+                <Label htmlFor="upload-apiKey">API Key</Label>
+                <Input
+                  id="upload-apiKey"
+                  type="password"
+                  value={uploadChannel.apiKey}
+                  onChange={(e) => setUploadChannel((prev) => ({ ...prev, apiKey: e.target.value }))}
+                  placeholder="NAVER API Key를 입력하세요"
+                />
+              </div>
+
+              <div className="space-y-2">
                 <Label htmlFor="upload-clientId">네이버 Id</Label>
                 <Input
                   id="upload-clientId"

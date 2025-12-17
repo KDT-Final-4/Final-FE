@@ -3,6 +3,7 @@ import { Badge } from "../../components/ui/badge";
 import { ConsumptionChart } from "../../components/ConsumptionChart";
 import { DemandChart } from "../../components/DemandChart";
 import { EnergyParameters } from "../../components/EnergyParameters";
+import { apiFetch } from "../../apiClient";
 
 type DateRange = {
   start: string;
@@ -85,7 +86,7 @@ export function Dashboard() {
 
       try {
         console.log("[Dashboard] fetching user info from", endpoint);
-        const response = await fetch(endpoint, { credentials: "include" });
+        const response = await apiFetch(endpoint);
         console.log("[Dashboard] response status", endpoint, response.status);
 
         const contentType = response.headers.get("content-type") || "unknown";

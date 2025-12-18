@@ -4,6 +4,7 @@ import { Button } from "./ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from "recharts";
 import { MousePointerClick } from "lucide-react";
+import { apiFetch } from "../apiClient";
 
 interface ConsumptionChartProps {
   selectedDay: string;
@@ -76,7 +77,7 @@ export function ConsumptionChart({ selectedDay: _selectedDay, selectedDevice: _s
       setError(null);
 
       try {
-        const response = await fetch(endpoint, {
+        const response = await apiFetch(endpoint, {
           credentials: "include",
           signal: controller.signal,
         });
@@ -209,7 +210,7 @@ export function ConsumptionChart({ selectedDay: _selectedDay, selectedDevice: _s
       setChartError(null);
       try {
         const firstEndpoint = `/api/dashboard/contents?page=0&size=${AGGREGATION_PAGE_SIZE}`;
-        const firstResponse = await fetch(firstEndpoint, {
+        const firstResponse = await apiFetch(firstEndpoint, {
           credentials: "include",
           signal: controller.signal,
         });
@@ -247,7 +248,7 @@ export function ConsumptionChart({ selectedDay: _selectedDay, selectedDevice: _s
           const pageIndex = index + 1;
           const endpoint = `/api/dashboard/contents?page=${pageIndex}&size=${AGGREGATION_PAGE_SIZE}`;
 
-          return fetch(endpoint, {
+          return apiFetch(endpoint, {
             credentials: "include",
             signal: controller.signal,
           })

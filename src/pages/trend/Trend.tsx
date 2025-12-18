@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Waves } from "lucide-react";
+import { apiFetch } from "@/apiClient";
 
 const PLATFORM_IDS = ["google", "instagram", "x"] as const;
 type PlatformId = (typeof PLATFORM_IDS)[number];
@@ -356,7 +357,7 @@ async function fetchTrendKeywords({ page, size, snsType }: FetchTrendParams): Pr
     params.set("snsType", snsType);
   }
 
-  const response = await fetch(`${sanitizedBase}/trend?${params.toString()}`, {
+  const response = await apiFetch(`${sanitizedBase}/trend?${params.toString()}`, {
     credentials: "include",
   });
 

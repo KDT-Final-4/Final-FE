@@ -11,6 +11,7 @@ import {
 } from "../../components/ui/card";
 import { Separator } from "../../components/ui/separator";
 import { Skeleton } from "../../components/ui/skeleton";
+import { apiFetch } from "../../apiClient";
 
 type UserProfile = {
   userId?: number;
@@ -58,7 +59,7 @@ export function ProfilePage() {
     setIsLoading(true);
     setError(null);
     try {
-      const response = await fetch("/api/user/me", { credentials: "include" });
+      const response = await apiFetch("/api/user/me");
       const contentType = response.headers.get("content-type") || "";
       const isJson = contentType.includes("application/json");
 

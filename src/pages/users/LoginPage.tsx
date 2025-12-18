@@ -11,6 +11,7 @@ import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
 import { Button } from "../../components/ui/button";
 import { Checkbox } from "../../components/ui/checkbox";
+import { apiFetch } from "../../apiClient";
 
 interface LoginPageProps {
   onLogin: () => void;
@@ -55,7 +56,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
 
     try {
       if (isRegistering) {
-        const response = await fetch("/api/user/register", {
+        const response = await apiFetch("/api/user/register", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ email, password, name }),
@@ -73,7 +74,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
         return;
       }
 
-      const response = await fetch("/api/auth/login", {
+      const response = await apiFetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),

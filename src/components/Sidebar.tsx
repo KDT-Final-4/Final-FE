@@ -12,6 +12,7 @@ import {
   LogOut,
   Calendar1,
 } from "lucide-react";
+import { apiFetch } from "../apiClient";
 
 export function Sidebar() {
   const [isExpanded, setIsExpanded] = useState(false);
@@ -89,7 +90,7 @@ export function Sidebar() {
 
     const fetchUser = async () => {
       try {
-        const response = await fetch("/api/user/me", { credentials: "include" });
+        const response = await apiFetch("/api/user/me");
         const contentType = response.headers.get("content-type") || "";
         if (!contentType.includes("application/json")) {
           console.error("[Sidebar] unexpected content-type for /api/user/me", contentType);

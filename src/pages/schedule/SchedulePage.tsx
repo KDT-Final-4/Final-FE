@@ -38,25 +38,107 @@ const REPEAT_LABELS: Record<string, string> = {
   ONCE: "한 번",
 };
 
+const KST_TIME_ZONE = "Asia/Seoul";
+
 const getRepeatLabel = (value?: string) => {
   if (!value) return "-";
   return REPEAT_LABELS[value] ?? value;
 };
 
+type DateTimeParts = {
+  year: string;
+  month: string;
+  day: string;
+  hour: string;
+  minute: string;
+  second: string;
+  millisecond: string;
+};
+
+const extractServerDateTimeParts = (value?: string | null): DateTimeParts | null => {
+  if (!value) return null;
+  const sanitized = value.trim().replace(/Z$/, "");
+  const match = sanitized.match(
+    /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,6}))?$/,
+  );
+  if (!match) return null;
+  const [, year, month, day, hour, minute, second, fraction = "0"] = match;
+  const millisecond = fraction.slice(0, 3).padEnd(3, "0");
+  return { year, month, day, hour, minute, second, millisecond };
+};
+
+const buildDateFromKstParts = (parts: DateTimeParts) =>
+  new Date(
+    Date.UTC(
+      Number(parts.year),
+      Number(parts.month) - 1,
+      Number(parts.day),
+      Number(parts.hour) - 9,
+      Number(parts.minute),
+      Number(parts.second),
+      Number(parts.millisecond),
+    ),
+  );
+
 const formatDateTime = (value?: string | null) => {
   if (!value) return "-";
-  const date = new Date(value);
+  const parts = extractServerDateTimeParts(value);
+  if (!parts) return value;
+  const date = buildDateFromKstParts(parts);
   if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString();
+  return new Intl.DateTimeFormat("ko-KR", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+    timeZone: KST_TIME_ZONE,
+  }).format(date);
 };
 
 const toLocalInputValue = (value?: string | null) => {
-  if (!value) return "";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  const offsetMs = date.getTimezoneOffset() * 60 * 1000;
-  const local = new Date(date.getTime() - offsetMs);
-  return local.toISOString().slice(0, 16);
+  const parts = extractServerDateTimeParts(value);
+  if (!parts) return "";
+  return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
+};
+
+const extractInputDateTimeParts = (value: string): DateTimeParts | null => {
+  if (!value) return null;
+  const match = value.match(
+    /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?$/,
+  );
+  if (!match) return null;
+  const [, year, month, day, hour, minute, second = "00", fraction = "0"] = match;
+  const millisecond = fraction.slice(0, 3).padEnd(3, "0");
+  const validationDate = new Date(
+    Date.UTC(
+      Number(year),
+      Number(month) - 1,
+      Number(day),
+      Number(hour),
+      Number(minute),
+      Number(second),
+      Number(millisecond),
+    ),
+  );
+  if (Number.isNaN(validationDate.getTime())) return null;
+  return {
+    year,
+    month,
+    day,
+    hour,
+    minute,
+    second: second.padStart(2, "0"),
+    millisecond,
+  };
+};
+
+const formatInputDateTimeForServer = (value: string) => {
+  const parts = extractInputDateTimeParts(value);
+  if (!parts) return null;
+  return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}:${parts.second}.${parts.millisecond}`;
 };
 
 export function SchedulePage() {
@@ -158,8 +240,8 @@ export function SchedulePage() {
       setError("시작 시간을 입력하세요.");
       return;
     }
-    const parsedStart = new Date(createForm.startTime);
-    if (Number.isNaN(parsedStart.getTime())) {
+    const formattedStartTime = formatInputDateTimeForServer(createForm.startTime);
+    if (!formattedStartTime) {
       setError("시작 시간 형식이 올바르지 않습니다.");
       return;
     }
@@ -173,7 +255,7 @@ export function SchedulePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           title: createForm.title.trim(),
-          startTime: parsedStart.toISOString(),
+          startTime: formattedStartTime,
           repeatInterval: createForm.repeatInterval,
         }),
       });
@@ -215,8 +297,8 @@ export function SchedulePage() {
       setError("시작 시간을 입력하세요.");
       return;
     }
-    const parsedStart = new Date(form.startTime);
-    if (Number.isNaN(parsedStart.getTime())) {
+    const formattedStartTime = formatInputDateTimeForServer(form.startTime);
+    if (!formattedStartTime) {
       setError("시작 시간 형식이 올바르지 않습니다.");
       return;
     }
@@ -230,7 +312,7 @@ export function SchedulePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           title: form.title.trim(),
-          startTime: parsedStart.toISOString(),
+          startTime: formattedStartTime,
           repeatInterval: form.repeatInterval,
         }),
       });

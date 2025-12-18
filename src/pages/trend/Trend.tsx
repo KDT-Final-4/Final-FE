@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { toast } from "sonner@2.0.3";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -29,6 +30,9 @@ interface TrendKeywordApiItem {
   searchVolume?: number;
   searchCount?: number;
   snsType?: TrendSnsType;
+  createdAt?: string | number;
+  created_at?: string | number;
+  createdDate?: string | number;
 }
 
 interface TrendKeyword {
@@ -37,6 +41,7 @@ interface TrendKeyword {
   category: string;
   searchVolume: number;
   snsType: TrendSnsType;
+  createdAt: string | null;
 }
 
 interface FetchTrendParams {
@@ -143,6 +148,7 @@ function normalizeTrendItem(item: TrendKeywordApiItem, index: number, fallbackTy
   const category = item.category ?? item.categoryName ?? "기타";
   const keyword = item.keyword ?? item.keywordName ?? "-";
   const searchVolumeValue = Number(item.searchVolume ?? item.searchCount ?? 0);
+  const createdAt = ensureDateString(item.createdAt ?? item.created_at ?? item.createdDate);
 
   return {
     rank: item.rank ?? index + 1,
@@ -150,7 +156,52 @@ function normalizeTrendItem(item: TrendKeywordApiItem, index: number, fallbackTy
     category,
     searchVolume: Number.isFinite(searchVolumeValue) ? searchVolumeValue : 0,
     snsType: item.snsType ?? fallbackType ?? "GOOGLE",
+    createdAt,
   };
+}
+
+function ensureDateString(value: unknown): string | null {
+  if (typeof value === "string" && value.trim().length > 0) {
+    const parsed = new Date(value);
+    if (!Number.isNaN(parsed.getTime())) {
+      return parsed.toISOString();
+    }
+    const numeric = Number(value);
+    if (Number.isFinite(numeric)) {
+      return new Date(numeric).toISOString();
+    }
+  }
+
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return new Date(value).toISOString();
+  }
+
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value.toISOString();
+  }
+
+  return null;
+}
+
+function formatTrendDateTime(value: string | null | undefined) {
+  if (!value) {
+    return "-";
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "-";
+  }
+
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  const hours = date.getHours();
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  const period = hours < 12 ? "오전" : "오후";
+  const hourString = String(hours).padStart(2, "0");
+
+  return `${year}.${month}.${day} ${period} ${hourString}:${minutes}`;
 }
 function parseNumericValue(value: unknown): number | undefined {
   if (typeof value === "number" && Number.isFinite(value)) {
@@ -375,33 +426,44 @@ export function Trend() {
   const [tableError, setTableError] = useState<string | null>(null);
   const [platformTrends, setPlatformTrends] = useState(initialPlatformTrends);
   const [platformLoading, setPlatformLoading] = useState(initialPlatformFlags);
+  const [platformFetched, setPlatformFetched] = useState(initialPlatformFlags);
   const [platformError, setPlatformError] = useState<TrendRecord<string | null>>({
     GOOGLE: null,
     INSTAGRAM: null,
     X: null,
   });
+  const [isCreatingContent, setIsCreatingContent] = useState(false);
 
   const tableRows = useMemo(() => tableTrends, [tableTrends]);
 
-  const handleCreateContent = useCallback(async (keyword: string) => {
-    try {
-      const response = await apiFetch(`${sanitizedBase}/trend/content`, {
-        method: "POST",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ keyword }),
-      });
+  const handleCreateContent = useCallback(
+    async (keyword: string) => {
+      if (isCreatingContent) return;
+      setIsCreatingContent(true);
+      try {
+        const response = await fetch(`${sanitizedBase}/trend/content`, {
+          method: "POST",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ keyword }),
+        });
 
         if (!response.ok) {
-            console.error("콘텐츠 생성 요청이 실패했습니다.");
-            return;
+          const responseMessage = await response.text();
+          throw new Error(responseMessage || "콘텐츠 생성 요청이 실패했습니다.");
         }
-    } catch (error) {
-      console.error("[Trend] failed to trigger content creation", error);
-    }
-  }, []);
+        toast.success("컨텐츠 생성 요청이 완료되었습니다. 로그에서 컨텐츠 생성 상태를 확인하실 수 있습니다.");
+      } catch (error) {
+        console.error("[Trend] failed to trigger content creation", error);
+        toast.error(error instanceof Error ? error.message : "콘텐츠 생성에 실패했습니다.");
+      } finally {
+        setIsCreatingContent(false);
+      }
+    },
+    [isCreatingContent]
+  );
 
   const loadTableTrends = useCallback(async (page: number, size: number) => {
     setTableLoading(true);
@@ -430,7 +492,7 @@ export function Trend() {
   const loadPlatformData = useCallback(
     async (platformId: PlatformId, force = false) => {
       const snsType = PLATFORM_TYPE_MAP[platformId].snsType;
-      if (!force && platformTrends[snsType]?.length) {
+      if (!force && platformFetched[snsType]) {
         return;
       }
 
@@ -453,6 +515,10 @@ export function Trend() {
           ...prev,
           [snsType]: items,
         }));
+        setPlatformFetched((prev) => ({
+          ...prev,
+          [snsType]: true,
+        }));
       } catch (error) {
         setPlatformError((prev) => ({
           ...prev,
@@ -465,7 +531,7 @@ export function Trend() {
         }));
       }
     },
-    [platformTrends]
+    [platformFetched]
   );
 
   useEffect(() => {
@@ -537,7 +603,6 @@ export function Trend() {
             플랫폼별 인기 검색어를 비교하고, 바로 콘텐츠를 제작해보세요.
           </p>
         </header>
-
         <Tabs
           className="mb-6"
           value={activePlatform}
@@ -589,35 +654,38 @@ export function Trend() {
                   </div>
                 )}
 
-                {!isLoading && !errorMessage && (
+                {!isLoading && !errorMessage && trends && trends.length > 0 && (
                   <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-3">
-                    {trends && trends.length > 0 ? (
-                      trends.map((trend) => (
-                        <Card key={`${snsType}-${trend.rank}-${trend.keyword}`} className="border border-primary/10 shadow-sm">
-                          <CardHeader className="space-y-3 pb-2">
-                            <div className="flex items-center justify-between text-xs text-muted-foreground">
-                              <span>순위 #{trend.rank}</span>
-                              <Badge variant="secondary">{trend.category}</Badge>
-                            </div>
-                            <CardTitle className="text-lg font-semibold leading-tight">{trend.keyword}</CardTitle>
-                            <CardDescription>선택한 플랫폼에서 급상승 중인 검색어</CardDescription>
-                          </CardHeader>
-                          <CardContent className="space-y-4">
-                            <div className="rounded-lg bg-muted/60 p-3">
-                              <p className="text-xs text-muted-foreground">검색량</p>
-                              <p className="text-2xl font-bold text-foreground">{numberFormatter.format(trend.searchVolume)}</p>
-                            </div>
-                            <Button className="w-full bg-sidebar-primary" onClick={() => handleCreateContent(trend.keyword)}>
-                              콘텐츠 생성하기
-                            </Button>
-                          </CardContent>
-                        </Card>
-                      ))
-                    ) : (
-                      <div className="col-span-full rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
-                        표시할 데이터가 없습니다.
-                      </div>
-                    )}
+                    {trends.map((trend) => (
+                      <Card key={`${snsType}-${trend.rank}-${trend.keyword}`} className="border border-primary/10 shadow-sm">
+                        <CardHeader className="space-y-3 pb-2">
+                          <div className="flex items-center justify-between text-xs text-muted-foreground">
+                            <span>순위 #{trend.rank}</span>
+                            <Badge variant="secondary">{trend.category}</Badge>
+                          </div>
+                          <CardTitle className="text-lg font-semibold leading-tight">{trend.keyword}</CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                          {/*<div className="rounded-lg bg-muted/60 p-3">*/}
+                          {/*  <p className="text-xs text-muted-foreground">검색량</p>*/}
+                          {/*  <p className="text-2xl font-bold text-foreground">{numberFormatter.format(trend.searchVolume)}</p>*/}
+                          {/*</div>*/}
+                          <Button
+                            className="w-full bg-sidebar-primary"
+                            disabled={isCreatingContent}
+                            onClick={() => handleCreateContent(trend.keyword)}
+                          >
+                            콘텐츠 생성하기
+                          </Button>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+
+                {!isLoading && !errorMessage && (!trends || trends.length === 0) && (
+                  <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
+                    표시할 데이터가 없습니다.
                   </div>
                 )}
               </TabsContent>
@@ -672,9 +740,9 @@ export function Trend() {
                     <TableRow>
                       <TableHead>키워드명</TableHead>
                       <TableHead>플랫폼</TableHead>
-                      <TableHead>카테고리</TableHead>
-                      <TableHead className="text-right">검색량</TableHead>
-                      <TableHead className="text-right">생성하기</TableHead>
+                      {/*<TableHead>카테고리</TableHead>*/}
+                      <TableHead className="text-left">생성시간</TableHead>
+                      <TableHead className="text-left">생성하기</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -685,9 +753,14 @@ export function Trend() {
                         <TableCell>
                           <Badge variant="outline">{row.category}</Badge>
                         </TableCell>
-                        <TableCell className="text-right font-semibold">{numberFormatter.format(row.searchVolume)}</TableCell>
-                        <TableCell className="text-right">
-                          <Button size="sm" variant="outline" onClick={() => handleCreateContent(row.keyword)}>
+                        <TableCell className="font-semibold whitespace-nowrap">{formatTrendDateTime(row.createdAt)}</TableCell>
+                        <TableCell>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={isCreatingContent}
+                            onClick={() => handleCreateContent(row.keyword)}
+                          >
                             생성하기
                           </Button>
                         </TableCell>

@@ -1,7 +1,8 @@
-import {Fragment, type KeyboardEvent, type MouseEvent, useCallback, useEffect, useMemo, useRef, useState} from "react";
+import {Fragment, type MouseEvent, useCallback, useEffect, useMemo, useRef, useState} from "react";
 import {Ban, CheckCircle2, Clock3, type LucideIcon} from "lucide-react";
 import {Badge} from "@/components/ui/badge";
 import {Button} from "@/components/ui/button";
+import { apiFetch } from "@/apiClient";
 import {
   Card,
   CardContent,
@@ -31,7 +32,6 @@ type ContentStatus = (typeof STATUSES)[number];
 
 type StatusMeta = {
   label: string;
-  badgeClass: string;
   description: string;
   icon: LucideIcon;
 };
@@ -41,6 +41,7 @@ type ReportItem = {
   jobId: string;
   userId: string;
   uploadChannelId: string;
+  uploadChannelName: string;
   title: string;
   body: string;
   status: ContentStatus;
@@ -69,6 +70,9 @@ type ContentApiItem = {
   uploadChannelId?: string | number;
   channelId?: string | number;
   channel_id?: string | number;
+  uploadChannelName?: string;
+  channelName?: string;
+  channel_name?: string;
   title?: string;
   name?: string;
   body?: string;
@@ -95,22 +99,30 @@ type ContentApiItem = {
 const STATUS_META: Record<ContentStatus, StatusMeta> = {
   PENDING: {
     label: "검수 대기",
-    badgeClass: "bg-amber-100 text-amber-700 border-amber-200",
     description: "AI 생성 콘텐츠를 검토하기 전 상태입니다.",
     icon: Clock3,
   },
   APPROVED: {
     label: "승인 완료",
-    badgeClass: "bg-emerald-100 text-emerald-700 border-emerald-200",
     description: "승인이 완료되어 배포 가능한 콘텐츠입니다.",
     icon: CheckCircle2,
   },
   REJECTED: {
     label: "반려",
-    badgeClass: "bg-rose-100 text-rose-700 border-rose-200",
     description: "수정이 필요해 반려된 콘텐츠입니다.",
     icon: Ban,
   },
+};
+
+const GENERATION_TYPE_LABELS: Record<string, string> = {
+  MANUAL: "수동생성",
+  AUTO: "자동생성",
+};
+
+const UPLOAD_CHANNEL_LABELS: Record<string, string> = {
+  X: "X",
+  INSTAGRAM: "인스타그램",
+  NAVER: "네이버 블로그",
 };
 
 const createEmptyReportMap = () =>
@@ -306,7 +318,7 @@ export function ReportsPage() {
           headers["X-XSRF-TOKEN"] = csrfToken;
         }
 
-        const response = await fetch(endpoint, {
+        const response = await apiFetch(endpoint, {
           method: "PATCH",
           credentials: "include",
           headers,
@@ -465,7 +477,7 @@ export function ReportsPage() {
             <TabsContent key={tab.value} value={tab.value} className="space-y-4">
               {showLoadingState ? (
                 <Card className="border-dashed">
-                  <CardContent className="py-10 text-center text-muted-foreground">
+                  <CardContent className="pt-10 pb-10 text-center text-muted-foreground">
                     콘텐츠를 불러오는 중입니다...
                   </CardContent>
                 </Card>
@@ -482,8 +494,8 @@ export function ReportsPage() {
                 </Card>
               ) : items.length === 0 ? (
                 <Card className="border-dashed">
-                  <CardContent className="py-10 text-center text-muted-foreground">
-                    현재 {tab.label} 상태의 보고서가 없습니다.
+                  <CardContent className="pt-10 pb-10 text-center text-muted-foreground">
+                    현재 {tab.label} 상태의 컨텐츠가 없습니다.
                   </CardContent>
                 </Card>
               ) : (
@@ -572,22 +584,6 @@ function ReportCard({
     body: report.body ?? "",
   }));
   const bodyTextareaRef = useRef<HTMLTextAreaElement | null>(null);
-  const handleCardKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (isEditing || event.target !== event.currentTarget) {
-      return;
-    }
-    if (event.key === "Enter" || event.key === " ") {
-      event.preventDefault();
-      onToggle();
-    }
-  };
-  const handleCardClick = (event: MouseEvent<HTMLDivElement>) => {
-    if (isEditing) {
-      event.stopPropagation();
-      return;
-    }
-    onToggle();
-  };
   const handleStatusButtonClick = (event: MouseEvent<HTMLButtonElement>, nextStatus: ContentStatus) => {
     event.stopPropagation();
     onStatusChange(nextStatus);
@@ -633,7 +629,7 @@ function ReportCard({
         headers["X-XSRF-TOKEN"] = csrfToken;
       }
 
-      const response = await fetch(endpoint, {
+      const response = await apiFetch(endpoint, {
         method: "PUT",
         credentials: "include",
         headers,
@@ -663,6 +659,10 @@ function ReportCard({
   const titleInputId = `report-title-${report.id}`;
   const bodyInputId = `report-body-${report.id}`;
   const currentBodyLength = isEditing ? editForm.body.length : report.body.length;
+  const shouldShowToggleButton = !isEditing && report.body.length > TEXT_LIMIT;
+  const generationTypeLabel = getGenerationTypeBadgeLabel(report.generationType);
+  const uploadChannelLabel = getUploadChannelBadgeLabel(report.uploadChannelName);
+  const shouldShowMetaBadges = !isEditing && (generationTypeLabel || uploadChannelLabel);
   const adjustBodyTextareaHeight = useCallback(() => {
     const textarea = bodyTextareaRef.current;
     if (!textarea) {
@@ -698,13 +698,10 @@ function ReportCard({
 
   return (
     <Card
-      className={`border border-border shadow-sm transition-colors ${
-        isEditing ? "cursor-default" : "cursor-pointer"
-      } ${isExpanded ? "ring-1 ring-primary/40" : "hover:border-primary/40"}`}
-      tabIndex={0}
+      className={`border border-border shadow-sm transition-colors cursor-default ${
+        isExpanded ? "ring-1 ring-primary/40" : "hover:border-primary/40"
+      }`}
       aria-expanded={isExpanded}
-      onClick={handleCardClick}
-      onKeyDown={handleCardKeyDown}
     >
       <CardHeader className="space-y-3">
         <div>
@@ -731,16 +728,27 @@ function ReportCard({
             ) : (
               <div className="flex flex-wrap items-center gap-2">
                 <h2 className="text-xl font-semibold leading-tight">{report.title}</h2>
-                <Badge variant="outline" className={status.badgeClass}>
-                  {status.label}
-                </Badge>
+                <div className="flex flex-wrap items-center gap-1 text-xs">
+                  {/*<Badge variant="secondary" className="text-xs font-medium">*/}
+                  {/*  {status.label}*/}
+                  {/*</Badge>*/}
+                  {shouldShowMetaBadges && (
+                    <>
+                      {generationTypeLabel && (
+                        <Badge variant="secondary" className="text-xs font-medium">
+                          {generationTypeLabel}
+                        </Badge>
+                      )}
+                      {uploadChannelLabel && (
+                        <Badge variant="secondary" className="text-xs font-medium">
+                          {uploadChannelLabel}
+                        </Badge>
+                      )}
+                    </>
+                  )}
+                </div>
               </div>
             )}
-            {/*{isEditing && (*/}
-            {/*  <Badge variant="outline" className={status.badgeClass}>*/}
-            {/*    {status.label}*/}
-            {/*  </Badge>*/}
-            {/*)}*/}
           </div>
         </div>
       </CardHeader>
@@ -768,9 +776,16 @@ function ReportCard({
               />
             </div>
           ) : (
-            <p className="mt-1 text-sm leading-relaxed text-foreground">
-              {isExpanded ? renderTextWithLineBreaks(report.body) : truncateText(report.body)}
-            </p>
+            <div className="mt-1 space-y-2">
+              <p className="text-sm leading-relaxed text-foreground">
+                {isExpanded ? renderTextWithLineBreaks(report.body) : truncateText(report.body)}
+              </p>
+              {shouldShowToggleButton && (
+                <Button size="sm" variant="ghost" className="h-auto px-0 text-primary" onClick={onToggle}>
+                  {isExpanded ? "접기" : "펼치기"}
+                </Button>
+              )}
+            </div>
           )}
         </div>
         <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
@@ -923,6 +938,10 @@ function normalizeReportItem(item: ContentApiItem, index: number): ReportItem | 
   const uploadChannelId = ensureString(
     item.uploadChannelId ?? item.channelId ?? item.channel_id ?? "-"
   );
+  const rawChannelName = ensureString(
+    item.uploadChannelName ?? item.channelName ?? item.channel_name ?? ""
+  );
+  const uploadChannelName = resolveUploadChannelName(rawChannelName || uploadChannelId);
   const title = ensureString(item.title ?? item.name ?? `콘텐츠 ${index + 1}`);
   const body = ensureString(item.body ?? item.content ?? "");
   const status = toContentStatus(item.status ?? item.contentStatus ?? item.state);
@@ -945,6 +964,7 @@ function normalizeReportItem(item: ContentApiItem, index: number): ReportItem | 
     jobId,
     userId,
     uploadChannelId,
+    uploadChannelName,
     title,
     body,
     status,
@@ -984,6 +1004,30 @@ function ensureString(value: unknown, fallback = "") {
   }
 
   return fallback;
+}
+
+function resolveUploadChannelName(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return "-";
+  }
+  const normalized = trimmed.toUpperCase();
+  return UPLOAD_CHANNEL_LABELS[normalized] ?? trimmed;
+}
+
+function getGenerationTypeBadgeLabel(value: string) {
+  if (!value) {
+    return null;
+  }
+  const normalized = value.toUpperCase();
+  return GENERATION_TYPE_LABELS[normalized] ?? value;
+}
+
+function getUploadChannelBadgeLabel(value: string) {
+  if (!value) {
+    return null;
+  }
+  return resolveUploadChannelName(value);
 }
 
 function ensureDateString(value: unknown) {

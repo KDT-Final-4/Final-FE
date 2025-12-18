@@ -7,6 +7,7 @@ import { Input } from "../../components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../components/ui/table";
 import { KpiCard } from "../../components/KpiCard";
+import { apiFetch } from "../../apiClient";
 
 type LogType = "INFO" | "ERROR" | "WARN";
 

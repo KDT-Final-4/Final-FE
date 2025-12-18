@@ -12,6 +12,7 @@ import {
   LogOut,
   Calendar1,
 } from "lucide-react";
+import { apiFetch } from "../apiClient";
 
 export function Sidebar() {
   const [isExpanded, setIsExpanded] = useState(false);

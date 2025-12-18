@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, MouseEvent } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Button } from "./ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from "recharts";
 import { MousePointerClick } from "lucide-react";
+import { apiFetch } from "../apiClient";
 
 interface ConsumptionChartProps {
   selectedDay: string;
@@ -14,10 +15,22 @@ type ContentItem = {
   contentId: number;
   title: string;
   keyword: string;
-  contentLink: string;
+  contentLink?: string | null;
+  link?: string | null; // API 호환용: link 필드가 내려오는 경우 대비
   clickCount: number;
   categoryId?: number;
   categoryName?: string;
+};
+
+type RawContentItem = Omit<ContentItem, "contentLink"> & {
+  contentLink?: string | null;
+  link?: string | null;
+};
+
+const normalizeContentItem = (item: RawContentItem): ContentItem => {
+  const { link, contentLink, ...rest } = item;
+  const resolvedLink = contentLink ?? link ?? null;
+  return { ...rest, contentLink: resolvedLink };
 };
 
 type ContentsResponse = {
@@ -32,8 +45,8 @@ type ContentsResponse = {
 const palette = ["#22c55e", "#16a34a", "#15803d", "#166534", "#14532d", "#052e16"];
 const OTHER_SLICE_COLOR = "#94a3b8";
 const PAGE_GROUP_SIZE = 10;
-const PAGE_SIZE_OPTIONS = [10, 20, 30];
-const DEFAULT_PAGE_SIZE = 10;
+const PAGE_SIZE_OPTIONS = [5, 10, 20, 30];
+const DEFAULT_PAGE_SIZE = 5;
 const CHART_TOP_N = 5;
 const MIN_SLICE_VALUE = 0.0001;
 const AGGREGATION_PAGE_SIZE = DEFAULT_PAGE_SIZE;
@@ -83,7 +96,7 @@ export function ConsumptionChart({ selectedDay: _selectedDay, selectedDevice: _s
         }
 
         const payload: ContentsResponse = await response.json();
-        const items = payload.items ?? payload.contents ?? [];
+        const items = (payload.items ?? payload.contents ?? []).map(normalizeContentItem);
         const responseTotalCount = parseNumeric(payload.totalCount) ?? parseNumeric(response.headers.get("X-Total-Count"));
         const responseTotalPages = parseNumeric(payload.totalPages) ?? parseNumeric(response.headers.get("X-Total-Pages"));
         const derivedTotalCount = typeof responseTotalCount === "number" ? responseTotalCount : page * pageSize + items.length;
@@ -129,6 +142,13 @@ export function ConsumptionChart({ selectedDay: _selectedDay, selectedDevice: _s
   const handleGroupPrev = () => {
     if (loading || !canGoGroupPrev) return;
     setPage((prev) => Math.max(0, prev - PAGE_GROUP_SIZE));
+  };
+
+  const handleContentLinkClick = (event: MouseEvent<HTMLAnchorElement>, link?: string | null) => {
+    const trimmed = link?.trim();
+    if (!trimmed) {
+      event.preventDefault();
+    }
   };
 
   const handleGroupNext = () => {
@@ -192,7 +212,7 @@ export function ConsumptionChart({ selectedDay: _selectedDay, selectedDevice: _s
       setChartError(null);
       try {
         const firstEndpoint = `/api/dashboard/contents?page=0&size=${AGGREGATION_PAGE_SIZE}`;
-        const firstResponse = await fetch(firstEndpoint, {
+        const firstResponse = await apiFetch(firstEndpoint, {
           credentials: "include",
           signal: controller.signal,
         });
@@ -208,7 +228,7 @@ export function ConsumptionChart({ selectedDay: _selectedDay, selectedDevice: _s
         }
 
         const firstPayload: ContentsResponse = await firstResponse.json();
-        const firstItems = firstPayload.items ?? firstPayload.contents ?? [];
+        const firstItems = (firstPayload.items ?? firstPayload.contents ?? []).map(normalizeContentItem);
         const responseTotalCount = parseNumeric(firstPayload.totalCount) ?? parseNumeric(firstResponse.headers.get("X-Total-Count"));
         const responseTotalPages = parseNumeric(firstPayload.totalPages) ?? parseNumeric(firstResponse.headers.get("X-Total-Pages"));
 
@@ -230,7 +250,7 @@ export function ConsumptionChart({ selectedDay: _selectedDay, selectedDevice: _s
           const pageIndex = index + 1;
           const endpoint = `/api/dashboard/contents?page=${pageIndex}&size=${AGGREGATION_PAGE_SIZE}`;
 
-          return fetch(endpoint, {
+          return apiFetch(endpoint, {
             credentials: "include",
             signal: controller.signal,
           })
@@ -240,7 +260,7 @@ export function ConsumptionChart({ selectedDay: _selectedDay, selectedDevice: _s
                 return [];
               }
               const payload: ContentsResponse = await response.json();
-              return payload.items ?? payload.contents ?? [];
+              return (payload.items ?? payload.contents ?? []).map(normalizeContentItem);
             })
             .catch(() => []);
         });
@@ -399,29 +419,34 @@ export function ConsumptionChart({ selectedDay: _selectedDay, selectedDevice: _s
               </SelectContent>
             </Select>
           </div>
-          <div className="grid grid-cols-1 gap-2">
-            {contents.map((content, index) => (
-              <a
-                key={content.contentId ?? index}
-                href={content.contentLink}
-                target="_blank"
-                rel="noreferrer"
-                className="flex items-center justify-between p-2 bg-muted/50 rounded-md cursor-pointer hover:bg-muted transition-colors"
-              >
-                <div className="flex items-center gap-2">
-                  <div
-                    className="w-2 h-2 rounded-full"
-                    style={{ backgroundColor: getColorForCategory(buildCategoryKey(content), index) }}
-                  />
-                  <span className="text-sm">{`${content.title} - ${content.keyword}`}</span>
-                </div>
-                <span className="flex items-center gap-1 text-sm font-medium text-foreground">
-                  <MousePointerClick className="w-4 h-4 text-primary" aria-hidden />
-                  {content.clickCount.toLocaleString()}회 클릭
-                </span>
-              </a>
-            ))}
-          </div>
+              <div className="grid grid-cols-1 gap-2">
+                {contents.map((content, index) => {
+                  const trimmedLink = content.contentLink?.trim();
+                  const hasLink = Boolean(trimmedLink);
+                  return (
+                    <a
+                      key={content.contentId ?? index}
+                      href={hasLink ? trimmedLink : undefined}
+                      target={hasLink ? "_blank" : undefined}
+                      rel={hasLink ? "noreferrer" : undefined}
+                      onClick={(event) => handleContentLinkClick(event, trimmedLink)}
+                      className="flex items-center justify-between p-2 bg-muted/50 rounded-md cursor-pointer hover:bg-muted transition-colors"
+                    >
+                      <div className="flex items-center gap-2">
+                        <div
+                          className="w-2 h-2 rounded-full"
+                          style={{ backgroundColor: getColorForCategory(buildCategoryKey(content), index) }}
+                        />
+                        <span className="text-sm">{`${content.title} - ${content.keyword}`}</span>
+                      </div>
+                      <span className="flex items-center gap-1 text-sm font-medium text-foreground">
+                        <MousePointerClick className="w-4 h-4 text-primary" aria-hidden />
+                        {content.clickCount.toLocaleString()}회 클릭
+                      </span>
+                    </a>
+                  );
+                })}
+              </div>
           {resolvedTotalPages > 0 && (
             <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
               <Button variant="ghost" size="sm" onClick={handleGroupPrev} disabled={loading || !canGoGroupPrev}>

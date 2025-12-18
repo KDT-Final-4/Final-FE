@@ -3,6 +3,7 @@ import { Badge } from "../../components/ui/badge";
 import { ConsumptionChart } from "../../components/ConsumptionChart";
 import { DemandChart } from "../../components/DemandChart";
 import { EnergyParameters } from "../../components/EnergyParameters";
+import { apiFetch } from "../../apiClient";
 
 type DateRange = {
   start: string;

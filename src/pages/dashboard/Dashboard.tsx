@@ -82,11 +82,12 @@ export function Dashboard() {
       data.name || data.email || "";
 
     const fetchUserName = async () => {
+      const { getApiUrl, getApiOptions } = await import("../../utils/api");
       const endpoint = "/api/user/me";
 
       try {
         console.log("[Dashboard] fetching user info from", endpoint);
-        const response = await apiFetch(endpoint);
+        const response = await fetch(getApiUrl(endpoint), getApiOptions());
         console.log("[Dashboard] response status", endpoint, response.status);
 
         const contentType = response.headers.get("content-type") || "unknown";
@@ -136,9 +137,10 @@ export function Dashboard() {
         console.log("[Dashboard] fetching status from", statusEndpoint);
         console.log("[Dashboard] fetching contents count from", contentsCountEndpoint);
 
+        const { getApiUrl, getApiOptions } = await import("../../utils/api");
         const [statusResponse, contentsCountResponse] = await Promise.all([
-          apiFetch(statusEndpoint),
-          apiFetch(contentsCountEndpoint),
+          fetch(getApiUrl(statusEndpoint), getApiOptions()),
+          fetch(getApiUrl(contentsCountEndpoint), getApiOptions()),
         ]);
 
         const statusContentType = statusResponse.headers.get("content-type") || "unknown";

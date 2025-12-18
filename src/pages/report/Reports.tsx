@@ -189,12 +189,14 @@ export function ReportsPage() {
             [status]: message,
           }));
 
+        const { getApiUrl, getApiOptions } = await import("../../utils/api");
         console.log("[Reports] fetching content from", endpoint);
-        const response = await apiFetch(endpoint, {
-          credentials: "include",
-          headers: {
-            Accept: "application/json",
-          },
+        const response = await fetch(getApiUrl(endpoint), {
+          ...getApiOptions({
+            headers: {
+              Accept: "application/json",
+            },
+          }),
         });
 
         const contentType = response.headers.get("content-type") || "unknown";

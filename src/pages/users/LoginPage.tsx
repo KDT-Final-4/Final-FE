@@ -56,10 +56,12 @@ export function LoginPage({ onLogin }: LoginPageProps) {
 
     try {
       if (isRegistering) {
-        const response = await apiFetch("/api/user/register", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, password, name }),
+        const { getApiUrl, getApiOptions } = await import("../../utils/api");
+        const response = await fetch(getApiUrl("/api/user/register"), {
+          ...getApiOptions({
+            method: "POST",
+            body: JSON.stringify({ email, password, name }),
+          }),
         });
 
         if (!response.ok) {
@@ -74,10 +76,12 @@ export function LoginPage({ onLogin }: LoginPageProps) {
         return;
       }
 
-      const response = await apiFetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+      const { getApiUrl, getApiOptions } = await import("../../utils/api");
+      const response = await fetch(getApiUrl("/api/auth/login"), {
+        ...getApiOptions({
+          method: "POST",
+          body: JSON.stringify({ email, password }),
+        }),
       });
 
       if (!response.ok) {

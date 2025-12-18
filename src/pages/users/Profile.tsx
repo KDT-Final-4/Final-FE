@@ -59,7 +59,8 @@ export function ProfilePage() {
     setIsLoading(true);
     setError(null);
     try {
-      const response = await apiFetch("/api/user/me");
+      const { getApiUrl, getApiOptions } = await import("../../utils/api");
+      const response = await fetch(getApiUrl("/api/user/me"), getApiOptions());
       const contentType = response.headers.get("content-type") || "";
       const isJson = contentType.includes("application/json");
 

@@ -53,5 +53,5 @@
       "@radix-ui/react-accordion@1.2.3": ["node_modules/@radix-ui/react-accordion"]
     }
   },
-  "include": ["src"]
+  "include": ["src", "api"]
 }

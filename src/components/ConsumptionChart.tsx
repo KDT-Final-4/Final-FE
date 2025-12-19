@@ -20,6 +20,7 @@ type ContentItem = {
   clickCount: number;
   categoryId?: number;
   categoryName?: string;
+  categoryDescription?: string;
 };
 
 type RawContentItem = Omit<ContentItem, "contentLink"> & {
@@ -184,6 +185,9 @@ export function ConsumptionChart({ selectedDay: _selectedDay, selectedDevice: _s
     if (content.categoryId !== undefined && content.categoryId !== null) {
       return `id-${content.categoryId}`;
     }
+    if (content.categoryDescription) {
+      return `desc-${content.categoryDescription}`;
+    }
     if (content.categoryName) {
       return `name-${content.categoryName}`;
     }
@@ -286,14 +290,24 @@ export function ConsumptionChart({ selectedDay: _selectedDay, selectedDevice: _s
     // categoryId -> 집계
     const aggregated = new Map<
       string,
-      { categoryId?: number; categoryName: string; clicks: number }
+      { categoryId?: number; categoryName: string; categoryDescription?: string; clicks: number }
     >();
 
     chartContents.forEach((item) => {
       const key = buildCategoryKey(item);
-      const categoryName = item.categoryName ?? "기타";
-      const prev = aggregated.get(key) ?? { categoryId: item.categoryId, categoryName, clicks: 0 };
-      aggregated.set(key, { ...prev, clicks: prev.clicks + (item.clickCount ?? 0) });
+      const categoryLabel = item.categoryDescription ?? item.categoryName ?? "기타";
+      const prev = aggregated.get(key) ?? {
+        categoryId: item.categoryId,
+        categoryName: categoryLabel,
+        categoryDescription: item.categoryDescription,
+        clicks: 0,
+      };
+      aggregated.set(key, {
+        ...prev,
+        categoryName: categoryLabel,
+        categoryDescription: item.categoryDescription ?? prev.categoryDescription,
+        clicks: prev.clicks + (item.clickCount ?? 0),
+      });
     });
 
     const sorted = Array.from(aggregated.values()).sort((a, b) => b.clicks - a.clicks);
@@ -304,9 +318,10 @@ export function ConsumptionChart({ selectedDay: _selectedDay, selectedDevice: _s
       const rawValue = item.clicks ?? 0;
       const categoryKey = item.categoryId !== undefined && item.categoryId !== null
         ? `id-${item.categoryId}`
-        : item.categoryName;
+        : (item.categoryDescription ?? item.categoryName);
+      const categoryLabel = item.categoryDescription ?? item.categoryName ?? "기타";
       return {
-        name: item.categoryName,
+        name: categoryLabel,
         rawValue,
         renderValue: rawValue > 0 ? rawValue : MIN_SLICE_VALUE,
         color: getColorForCategory(categoryKey ?? "unknown", index),
@@ -423,6 +438,7 @@ export function ConsumptionChart({ selectedDay: _selectedDay, selectedDevice: _s
                 {contents.map((content, index) => {
                   const trimmedLink = content.contentLink?.trim();
                   const hasLink = Boolean(trimmedLink);
+                  const categoryLabel = content.categoryDescription ?? content.categoryName ?? "기타";
                   return (
                     <a
                       key={content.contentId ?? index}
@@ -437,7 +453,7 @@ export function ConsumptionChart({ selectedDay: _selectedDay, selectedDevice: _s
                           className="w-2 h-2 rounded-full"
                           style={{ backgroundColor: getColorForCategory(buildCategoryKey(content), index) }}
                         />
-                        <span className="text-sm">{`${content.title} - ${content.keyword}`}</span>
+                        <span className="text-sm">{`${categoryLabel} : ${content.title}`}</span>
                       </div>
                       <span className="flex items-center gap-1 text-sm font-medium text-foreground">
                         <MousePointerClick className="w-4 h-4 text-primary" aria-hidden />

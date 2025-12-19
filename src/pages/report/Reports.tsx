@@ -1,5 +1,5 @@
 import {Fragment, type MouseEvent, useCallback, useEffect, useMemo, useRef, useState} from "react";
-import {Ban, CheckCircle2, Clock3, type LucideIcon} from "lucide-react";
+import {Ban, CheckCircle2, Clock3, RefreshCw, type LucideIcon} from "lucide-react";
 import {Badge} from "@/components/ui/badge";
 import {Button} from "@/components/ui/button";
 import { apiFetch } from "@/apiClient";
@@ -385,14 +385,28 @@ export function ReportsPage() {
   };
 
   const activeTabMeta = getTabMeta(activeTab);
+  const isRefreshDisabled = loadingStatus === activeTab;
 
   return (
     <div className="p-6 space-y-6">
-      <div>
-        <h1 className="text-3xl font-semibold">검수</h1>
-        <p className="text-muted-foreground">
-          업로드 전 AI 생성 컨텐츠를 확인하세요.
-        </p>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-semibold">검수</h1>
+          <p className="text-muted-foreground">
+            업로드 전 AI 생성 컨텐츠를 확인하세요.
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            className="gap-2"
+            onClick={refreshActiveTabReports}
+            disabled={isRefreshDisabled}
+          >
+            <RefreshCw className="w-4 h-4" />
+            목록 새로고침
+          </Button>
+        </div>
       </div>
 
       <Tabs

@@ -361,9 +361,17 @@ export function ConsumptionChart({ selectedDay: _selectedDay, selectedDevice: _s
   };
 
   const CustomLegend = ({ payload }: any) => {
+    const visibleEntries = (payload ?? []).filter(
+      (entry: any) => (entry.payload?.rawValue ?? 0) > 0
+    );
+
+    if (!visibleEntries.length) {
+      return null;
+    }
+
     return (
       <div className="flex flex-wrap gap-4 justify-center mt-4">
-        {payload.map((entry: any, index: number) => (
+        {visibleEntries.map((entry: any, index: number) => (
           <div key={index} className="flex items-center gap-2 text-sm">
             <div 
               className="w-3 h-3 rounded-full" 

@@ -453,7 +453,7 @@ export function ConsumptionChart({ selectedDay: _selectedDay, selectedDevice: _s
                           className="w-2 h-2 rounded-full"
                           style={{ backgroundColor: getColorForCategory(buildCategoryKey(content), index) }}
                         />
-                        <span className="text-sm">{`${categoryLabel} : ${content.title}`}</span>
+                        <span className="text-sm">{`(${categoryLabel}) ${content.title}`}</span>
                       </div>
                       <span className="flex items-center gap-1 text-sm font-medium text-foreground">
                         <MousePointerClick className="w-4 h-4 text-primary" aria-hidden />

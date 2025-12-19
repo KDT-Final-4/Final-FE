@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Waves } from "lucide-react";
+import { RefreshCw, Waves } from "lucide-react";
 import { apiFetch } from "@/apiClient";
 
 const PLATFORM_IDS = ["google", "instagram", "x"] as const;
@@ -65,7 +65,8 @@ const PLATFORM_LABELS: Record<TrendSnsType, string> = {
 };
 
 const DEFAULT_PAGE = 0;
-const DEFAULT_TAB_SIZE = 3;
+const PLATFORM_DISPLAY_COUNT = 3;
+const PLATFORM_FETCH_SIZE = 10;
 const DEFAULT_TABLE_SIZE = 10;
 const PAGE_GROUP_SIZE = 10;
 const TABLE_PAGE_SIZE_OPTIONS = [10, 20, 30];
@@ -142,6 +143,19 @@ function extractTrendItems(payload: unknown): TrendKeywordApiItem[] {
     }
   }
   return [];
+}
+
+function selectRandomItems<T>(items: T[], count: number): T[] {
+  if (items.length <= count) {
+    return items;
+  }
+
+  const shuffled = [...items];
+  for (let index = shuffled.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(Math.random() * (index + 1));
+    [shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]];
+  }
+  return shuffled.slice(0, count);
 }
 
 function normalizeTrendItem(item: TrendKeywordApiItem, index: number, fallbackType?: TrendSnsType): TrendKeyword {
@@ -509,12 +523,13 @@ export function Trend() {
       try {
         const { items } = await fetchTrendKeywords({
           page: DEFAULT_PAGE,
-          size: DEFAULT_TAB_SIZE,
+          size: PLATFORM_FETCH_SIZE,
           snsType,
         });
+        const selectedItems = selectRandomItems(items, PLATFORM_DISPLAY_COUNT);
         setPlatformTrends((prev) => ({
           ...prev,
-          [snsType]: items,
+          [snsType]: selectedItems,
         }));
         setPlatformFetched((prev) => ({
           ...prev,
@@ -594,15 +609,33 @@ export function Trend() {
     setTablePageSize(newSize);
   };
 
+  const handleRefresh = useCallback(() => {
+    loadTableTrends(tablePage, tablePageSize);
+    loadPlatformData(activePlatform, true);
+  }, [activePlatform, loadPlatformData, loadTableTrends, tablePage, tablePageSize]);
+
+  const activeSnsType = PLATFORM_TYPE_MAP[activePlatform].snsType;
+  const isRefreshDisabled = tableLoading || platformLoading[activeSnsType];
+
   return (
     <div className="min-h-screen" style={{ backgroundColor: "#f8faf9" }}>
       <div className="p-6">
-        <header className="space-y-2 mb-6">
-          {/*<p className="text-sm font-medium text-primary">실시간 트렌드 허브</p>*/}
-          <h1 className="text-3xl font-semibold text-foreground">트렌드</h1>
-          <p className="text-muted-foreground">
-            플랫폼별 인기 검색어를 비교하고, 바로 콘텐츠를 제작해보세요.
-          </p>
+        <header className="mb-6">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="space-y-1">
+              {/*<p className="text-sm font-medium text-primary">실시간 트렌드 허브</p>*/}
+              <h1 className="text-3xl font-semibold text-foreground">트렌드</h1>
+              <p className="text-muted-foreground">
+                플랫폼별 인기 검색어를 비교하고, 바로 콘텐츠를 제작해보세요.
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" className="gap-2" onClick={handleRefresh} disabled={isRefreshDisabled}>
+                <RefreshCw className="w-4 h-4" />
+                목록 새로고침
+              </Button>
+            </div>
+          </div>
         </header>
         <Tabs
           className="mb-6"
@@ -661,8 +694,7 @@ export function Trend() {
                       <Card key={`${snsType}-${trend.rank}-${trend.keyword}`} className="border border-primary/10 shadow-sm">
                         <CardHeader className="space-y-3 pb-2">
                           <div className="flex items-center justify-between text-xs text-muted-foreground">
-                            <span>순위 #{trend.rank}</span>
-                            <Badge variant="secondary">{trend.category}</Badge>
+                            <span>추천 키워드</span>
                           </div>
                           <CardTitle className="text-lg font-semibold leading-tight">{trend.keyword}</CardTitle>
                         </CardHeader>
@@ -751,9 +783,9 @@ export function Trend() {
                       <TableRow key={`${row.snsType}-${row.rank}-${row.keyword}`}>
                         <TableCell className="font-medium">{row.keyword}</TableCell>
                         <TableCell>{PLATFORM_LABELS[row.snsType]}</TableCell>
-                        <TableCell>
-                          <Badge variant="outline">{row.category}</Badge>
-                        </TableCell>
+                        {/*<TableCell>*/}
+                        {/*  <Badge variant="outline">{row.category}</Badge>*/}
+                        {/*</TableCell>*/}
                         <TableCell className="font-semibold whitespace-nowrap">{formatTrendDateTime(row.createdAt)}</TableCell>
                         <TableCell>
                           <Button

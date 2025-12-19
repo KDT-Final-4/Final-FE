@@ -3,6 +3,7 @@ import {Ban, CheckCircle2, Clock3, type LucideIcon} from "lucide-react";
 import {Badge} from "@/components/ui/badge";
 import {Button} from "@/components/ui/button";
 import { apiFetch } from "@/apiClient";
+import { toast } from "sonner@2.0.3";
 import {
   Card,
   CardContent,
@@ -334,6 +335,13 @@ export function ReportsPage() {
         }
 
         refreshActiveTabReports();
+        if (nextStatus === "APPROVED") {
+          toast.success(
+            "승인 완료 되었습니다. 컨텐츠 업로드 중 입니다. 승인완료된 컨텐츠는 승인 완료 탭에서 확인하실 수 있습니다."
+          );
+        } else if (nextStatus === "REJECTED") {
+          toast.error("반려 되었습니다. 반려된 컨텐츠는 반려 탭에서 확인하실 수 있습니다.");
+        }
       } catch (error) {
         console.error("[Reports] failed to update status", endpoint, error);
         setErrorMap((prev) => ({

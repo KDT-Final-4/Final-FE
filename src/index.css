@@ -785,12 +785,20 @@
     width: calc(var(--spacing) * 20);
   }
 
+  .w-40 {
+      width: calc(var(--spacing) * 40);
+  }
+
   .w-64 {
     width: calc(var(--spacing) * 64);
   }
 
   .w-\[120px\] {
     width: 120px;
+  }
+
+  .w-\[200px\] {
+    width: 200px;
   }
 
   .w-\[400px\] {

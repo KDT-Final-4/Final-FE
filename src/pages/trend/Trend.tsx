@@ -1,13 +1,12 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { toast } from "sonner@2.0.3";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { RefreshCw, Waves } from "lucide-react";
-import { apiFetch } from "@/apiClient";
+import {useCallback, useEffect, useMemo, useState} from "react";
+import {toast} from "sonner@2.0.3";
+import {Button} from "@/components/ui/button";
+import {Card, CardContent, CardDescription, CardHeader, CardTitle} from "@/components/ui/card";
+import {Input} from "@/components/ui/input";
+import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from "@/components/ui/select";
+import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from "@/components/ui/table";
+import {Tabs, TabsContent, TabsList, TabsTrigger} from "@/components/ui/tabs";
+import {RefreshCw, Waves} from "lucide-react";
 
 const PLATFORM_IDS = ["google", "instagram", "x"] as const;
 type PlatformId = (typeof PLATFORM_IDS)[number];
@@ -217,6 +216,7 @@ function formatTrendDateTime(value: string | null | undefined) {
 
   return `${year}.${month}.${day} ${period} ${hourString}:${minutes}`;
 }
+
 function parseNumericValue(value: unknown): number | undefined {
   if (typeof value === "number" && Number.isFinite(value)) {
     return value;
@@ -361,7 +361,7 @@ function extractTotalPages(payload: unknown): number | undefined {
   return undefined;
 }
 
-async function fetchTrendKeywords({ page, size, snsType }: FetchTrendParams): Promise<TrendKeywordResponse> {
+async function fetchTrendKeywords({page, size, snsType}: FetchTrendParams): Promise<TrendKeywordResponse> {
   const params = new URLSearchParams({
     page: String(page),
     size: String(size),
@@ -371,7 +371,7 @@ async function fetchTrendKeywords({ page, size, snsType }: FetchTrendParams): Pr
     params.set("snsType", snsType);
   }
 
-  const { getApiUrl, getApiOptions } = await import("../../utils/api");
+  const {getApiUrl, getApiOptions} = await import("../../utils/api");
   const response = await fetch(`${getApiUrl(`${sanitizedBase}/trend`)}?${params.toString()}`, {
     ...getApiOptions(),
   });
@@ -448,12 +448,18 @@ export function Trend() {
     X: null,
   });
   const [isCreatingContent, setIsCreatingContent] = useState(false);
+  const [customKeyword, setCustomKeyword] = useState("");
 
   const tableRows = useMemo(() => tableTrends, [tableTrends]);
 
   const handleCreateContent = useCallback(
-    async (keyword: string) => {
-      if (isCreatingContent) return;
+    async (inputKeyword: string) => {
+      const keyword = inputKeyword.trim();
+      if (!keyword) {
+        toast.error("검색어를 입력해주세요.");
+        return false;
+      }
+      if (isCreatingContent) return false;
       setIsCreatingContent(true);
       try {
         const { getApiUrl, getApiOptions } = await import("../../utils/api");
@@ -469,9 +475,11 @@ export function Trend() {
           throw new Error(responseMessage || "콘텐츠 생성 요청이 실패했습니다.");
         }
         toast.success("컨텐츠 생성 요청이 완료되었습니다. 로그에서 컨텐츠 생성 상태를 확인하실 수 있습니다.");
+        return true;
       } catch (error) {
         console.error("[Trend] failed to trigger content creation", error);
         toast.error(error instanceof Error ? error.message : "콘텐츠 생성에 실패했습니다.");
+        return false;
       } finally {
         setIsCreatingContent(false);
       }
@@ -479,12 +487,19 @@ export function Trend() {
     [isCreatingContent]
   );
 
+  const handleCustomKeywordSubmit = useCallback(async () => {
+    const success = await handleCreateContent(customKeyword);
+    if (success) {
+      setCustomKeyword("");
+    }
+  }, [customKeyword, handleCreateContent]);
+
   const loadTableTrends = useCallback(async (page: number, size: number) => {
     setTableLoading(true);
     setTableError(null);
 
     try {
-      const { items, totalCount, totalPages } = await fetchTrendKeywords({
+      const {items, totalCount, totalPages} = await fetchTrendKeywords({
         page,
         size,
       });
@@ -520,7 +535,7 @@ export function Trend() {
       }));
 
       try {
-        const { items } = await fetchTrendKeywords({
+        const {items} = await fetchTrendKeywords({
           page: DEFAULT_PAGE,
           size: PLATFORM_FETCH_SIZE,
           snsType,
@@ -566,7 +581,7 @@ export function Trend() {
   const tablePageGroupStart = totalPages > 0 ? Math.floor(tablePage / PAGE_GROUP_SIZE) * PAGE_GROUP_SIZE : 0;
   const tablePageGroupEnd = totalPages > 0 ? Math.min(totalPages, tablePageGroupStart + PAGE_GROUP_SIZE) : 0;
   const tablePageNumbers = Array.from(
-    { length: Math.max(0, tablePageGroupEnd - tablePageGroupStart) },
+    {length: Math.max(0, tablePageGroupEnd - tablePageGroupStart)},
     (_, index) => tablePageGroupStart + index
   );
   const canGoPrevPage = tablePage > 0;
@@ -617,7 +632,7 @@ export function Trend() {
   const isRefreshDisabled = tableLoading || platformLoading[activeSnsType];
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: "#f8faf9" }}>
+    <div className="min-h-screen" style={{backgroundColor: "#f8faf9"}}>
       <div className="p-6">
         <header className="mb-6">
           <div className="flex flex-wrap items-center justify-between gap-4">
@@ -630,113 +645,152 @@ export function Trend() {
             </div>
             <div className="flex gap-2">
               <Button variant="outline" className="gap-2" onClick={handleRefresh} disabled={isRefreshDisabled}>
-                <RefreshCw className="w-4 h-4" />
+                <RefreshCw className="w-4 h-4"/>
                 목록 새로고침
               </Button>
             </div>
           </div>
         </header>
-        <Tabs
-          className="mb-6"
-          value={activePlatform}
-          onValueChange={(value) => {
-            if (isPlatformId(value)) {
-              setActivePlatform(value);
-            }
-          }}
-        >
-          <TabsList className="grid w-full grid-cols-3">
-            {platforms.map((platform) => (
-              <TabsTrigger
-                key={platform.id}
-                value={platform.id}
-                className="flex items-center gap-2"
-              >
-                <span className="flex items-center gap-2">
-                  <Waves className="w-4 h-4" />
-                  {platform.name}
-                </span>
-                <span className="flex items-center gap-2 text-xs text-muted-foreground">
-                  {platform.description}
-                </span>
-                {/*<span className="text-xs text-primary/80">{platform.highlight}</span>*/}
-              </TabsTrigger>
-            ))}
-          </TabsList>
 
-          {platforms.map((platform) => {
-            const snsType = platform.snsType;
-            const trends = platformTrends[snsType];
-            const isLoading = platformLoading[snsType];
-            const errorMessage = platformError[snsType];
+        <div className="mt-8 mb-6 p-6 rounded-lg border border-dashed p-4 shadow-sm bg-card">
+          <div className="flex flex-col gap-3 md:flex-row md:items-end">
+            <div className="flex-1 space-y-1">
+              <p className="text-lg font-medium text-foreground">키워드 입력</p>
+              <p className="font-medium text-foreground text-muted-foreground">직접 키워드를 입력해 컨텐츠를 생성해 보세요.</p>
+              <div className="flex gap-2 mt-4">
+                <Input
+                  placeholder=""
+                  value={customKeyword}
+                  onChange={(event) => setCustomKeyword(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      void handleCustomKeywordSubmit();
+                    }
+                  }}
+                  disabled={isCreatingContent}
+                  className="pr-3 bg-muted"
+                />
+                <Button
+                  className="w-40 md:w-auto"
+                  onClick={() => {
+                    void handleCustomKeywordSubmit();
+                  }}
+                  disabled={isCreatingContent}
+                >
+                  키워드 생성
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
 
-            return (
-              <TabsContent key={platform.id} value={platform.id} className="space-y-4">
-                {isLoading && (
-                  <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
-                    {platform.name} 데이터를 불러오는 중입니다...
-                  </div>
-                )}
+        <div className="mt-8 mb-6 rounded-lg border border-dashed p-4 shadow-sm bg-card">
+          <Tabs
+            value={activePlatform}
+            onValueChange={(value) => {
+              if (isPlatformId(value)) {
+                setActivePlatform(value);
+              }
+            }}
+          >
+            <TabsList className="grid w-full grid-cols-3">
+              {platforms.map((platform) => (
+                <TabsTrigger
+                  key={platform.id}
+                  value={platform.id}
+                  className="flex items-center gap-2"
+                >
+                  <span className="flex items-center gap-2">
+                    <Waves className="w-4 h-4"/>
+                    {platform.name}
+                  </span>
+                  <span className="flex items-center gap-2 text-xs text-muted-foreground">
+                    {platform.description}
+                  </span>
+                  {/*<span className="text-xs text-primary/80">{platform.highlight}</span>*/}
+                </TabsTrigger>
+              ))}
+            </TabsList>
 
-                {!isLoading && errorMessage && (
-                  <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
-                    <p>{errorMessage}</p>
-                    <Button className="mt-3" size="sm" variant="outline" onClick={() => handleRetry(platform.id)}>
-                      다시 시도
-                    </Button>
-                  </div>
-                )}
+            {platforms.map((platform) => {
+              const snsType = platform.snsType;
+              const trends = platformTrends[snsType];
+              const isLoading = platformLoading[snsType];
+              const errorMessage = platformError[snsType];
 
-                {!isLoading && !errorMessage && trends && trends.length > 0 && (
-                  <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-3">
-                    {trends.map((trend) => (
-                      <Card key={`${snsType}-${trend.rank}-${trend.keyword}`} className="border border-primary/10 shadow-sm">
-                        <CardHeader className="space-y-3 pb-2">
-                          <div className="flex items-center justify-between text-xs text-muted-foreground">
-                            <span>추천 키워드</span>
-                          </div>
-                          <CardTitle className="text-lg font-semibold leading-tight">{trend.keyword}</CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                          {/*<div className="rounded-lg bg-muted/60 p-3">*/}
-                          {/*  <p className="text-xs text-muted-foreground">검색량</p>*/}
-                          {/*  <p className="text-2xl font-bold text-foreground">{numberFormatter.format(trend.searchVolume)}</p>*/}
-                          {/*</div>*/}
-                          <Button
-                            className="w-full bg-sidebar-primary"
-                            disabled={isCreatingContent}
-                            onClick={() => handleCreateContent(trend.keyword)}
-                          >
-                            콘텐츠 생성하기
-                          </Button>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
-                )}
+              return (
+                <TabsContent key={platform.id} value={platform.id} className="space-y-4">
+                  {isLoading && (
+                    <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
+                      {platform.name} 데이터를 불러오는 중입니다...
+                    </div>
+                  )}
 
-                {!isLoading && !errorMessage && (!trends || trends.length === 0) && (
-                  <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
-                    표시할 데이터가 없습니다.
-                  </div>
-                )}
-              </TabsContent>
-            );
-          })}
-        </Tabs>
+                  {!isLoading && errorMessage && (
+                    <div
+                      className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
+                      <p>{errorMessage}</p>
+                      <Button className="mt-3" size="sm" variant="outline" onClick={() => handleRetry(platform.id)}>
+                        다시 시도
+                      </Button>
+                    </div>
+                  )}
 
-        <Card>
+                  {!isLoading && !errorMessage && trends && trends.length > 0 && (
+                    <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-3">
+                      {trends.map((trend) => (
+                        <Card key={`${snsType}-${trend.rank}-${trend.keyword}`}
+                              className="border border-primary/10 shadow-sm">
+                          <CardHeader className="space-y-3 pb-2">
+                            <div className="flex items-center justify-between text-base text-muted-foreground">
+                              <span>추천 키워드</span>
+                            </div>
+                            <CardTitle className="text-lg font-semibold leading-tight">{trend.keyword}</CardTitle>
+                          </CardHeader>
+                          <CardContent className="space-y-4">
+                            {/*<div className="rounded-lg bg-muted/60 p-3">*/}
+                            {/*  <p className="text-xs text-muted-foreground">검색량</p>*/}
+                            {/*  <p className="text-2xl font-bold text-foreground">{numberFormatter.format(trend.searchVolume)}</p>*/}
+                            {/*</div>*/}
+                            <Button
+                              className="w-full"
+                              disabled={isCreatingContent}
+                              onClick={() => {
+                                void handleCreateContent(trend.keyword);
+                              }}
+                            >
+                              콘텐츠 생성하기
+                            </Button>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  )}
+
+                  {!isLoading && !errorMessage && (!trends || trends.length === 0) && (
+                    <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
+                      표시할 데이터가 없습니다.
+                    </div>
+                  )}
+                </TabsContent>
+              );
+            })}
+          </Tabs>
+        </div>
+
+        <Card className=" shadow-sm">
           <CardHeader className="pb-2">
             <div className="flex flex-wrap justify-between gap-4">
               <div className="space-y-1">
-                <CardTitle>전체 플랫폼 인기 검색어</CardTitle>
+                <CardTitle className="text-xl">전체 플랫폼 인기 검색어</CardTitle>
                 <CardDescription>플랫폼을 통합한 상위 키워드를 한눈에 비교하세요.</CardDescription>
               </div>
               <div className="flex items-center gap-3">
                 {/*<span className="text-sm text-muted-foreground">한 페이지당</span>*/}
                 <Select value={String(tablePageSize)} onValueChange={handleTablePageSizeChange}>
                   <SelectTrigger className="w-[140px]">
-                    <SelectValue placeholder="페이지 크기" />
+                    <SelectValue placeholder="페이지 크기"/>
                   </SelectTrigger>
                   <SelectContent>
                     {TABLE_PAGE_SIZE_OPTIONS.map((sizeOption) => (
@@ -759,7 +813,8 @@ export function Trend() {
             {!tableLoading && tableError && (
               <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
                 <p>{tableError}</p>
-                <Button className="mt-3" variant="outline" size="sm" onClick={() => loadTableTrends(tablePage, tablePageSize)}>
+                <Button className="mt-3" variant="outline" size="sm"
+                        onClick={() => loadTableTrends(tablePage, tablePageSize)}>
                   다시 시도
                 </Button>
               </div>
@@ -770,11 +825,11 @@ export function Trend() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>키워드명</TableHead>
-                      <TableHead>플랫폼</TableHead>
+                      <TableHead className="w-[400px]">키워드명</TableHead>
+                      <TableHead className="w-[200px]">플랫폼</TableHead>
                       {/*<TableHead>카테고리</TableHead>*/}
-                      <TableHead className="text-left">생성시간</TableHead>
-                      <TableHead className="text-left">생성하기</TableHead>
+                      <TableHead className="w-[200px] text-left">생성시간</TableHead>
+                      <TableHead className="w-[200px] text-center">생성하기</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -785,13 +840,16 @@ export function Trend() {
                         {/*<TableCell>*/}
                         {/*  <Badge variant="outline">{row.category}</Badge>*/}
                         {/*</TableCell>*/}
-                        <TableCell className="font-semibold whitespace-nowrap">{formatTrendDateTime(row.createdAt)}</TableCell>
-                        <TableCell>
+                        <TableCell
+                          className="font-semibold whitespace-nowrap">{formatTrendDateTime(row.createdAt)}</TableCell>
+                        <TableCell className="text-center">
                           <Button
                             size="sm"
                             variant="outline"
                             disabled={isCreatingContent}
-                            onClick={() => handleCreateContent(row.keyword)}
+                            onClick={() => {
+                              void handleCreateContent(row.keyword);
+                            }}
                           >
                             생성하기
                           </Button>
@@ -803,10 +861,12 @@ export function Trend() {
                 {totalPages > 0 && (
                   <div className="mt-4 flex flex-col items-center gap-3">
                     <div className="flex flex-wrap items-center justify-center gap-2">
-                      <Button variant="ghost" size="sm" onClick={handleTableGroupPrev} disabled={tableLoading || !canGoGroupPrev}>
+                      <Button variant="ghost" size="sm" onClick={handleTableGroupPrev}
+                              disabled={tableLoading || !canGoGroupPrev}>
                         {"<<"}
                       </Button>
-                      <Button variant="ghost" size="sm" onClick={handleTablePrev} disabled={tableLoading || !canGoPrevPage}>
+                      <Button variant="ghost" size="sm" onClick={handleTablePrev}
+                              disabled={tableLoading || !canGoPrevPage}>
                         {"<"}
                       </Button>
                       {tablePageNumbers.map((pageNumber) => (
@@ -819,10 +879,12 @@ export function Trend() {
                           {pageNumber + 1}
                         </Button>
                       ))}
-                      <Button variant="ghost" size="sm" onClick={handleTableNext} disabled={tableLoading || !canGoNextPage}>
+                      <Button variant="ghost" size="sm" onClick={handleTableNext}
+                              disabled={tableLoading || !canGoNextPage}>
                         {">"}
                       </Button>
-                      <Button variant="ghost" size="sm" onClick={handleTableGroupNext} disabled={tableLoading || !canGoGroupNext}>
+                      <Button variant="ghost" size="sm" onClick={handleTableGroupNext}
+                              disabled={tableLoading || !canGoGroupNext}>
                         {">>"}
                       </Button>
                     </div>

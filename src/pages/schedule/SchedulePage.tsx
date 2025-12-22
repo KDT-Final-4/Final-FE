@@ -258,7 +258,7 @@ export function SchedulePage() {
           method: "POST",
           body: JSON.stringify({
             title: createForm.title.trim(),
-            startTime: parsedStart.toISOString(),
+            startTime: formattedStartTime,
             repeatInterval: createForm.repeatInterval,
           }),
         }),
@@ -317,7 +317,7 @@ export function SchedulePage() {
           method: "PUT",
           body: JSON.stringify({
             title: form.title.trim(),
-            startTime: parsedStart.toISOString(),
+            startTime: formattedStartTime,
             repeatInterval: form.repeatInterval,
           }),
         }),

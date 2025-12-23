@@ -462,13 +462,12 @@ export function Trend() {
       if (isCreatingContent) return false;
       setIsCreatingContent(true);
       try {
-        const response = await fetch(`${sanitizedBase}/trend/content`, {
-          method: "POST",
-          credentials: "include",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({keyword}),
+        const { getApiUrl, getApiOptions } = await import("../../utils/api");
+        const response = await fetch(getApiUrl(`${sanitizedBase}/trend/content`), {
+          ...getApiOptions({
+            method: "POST",
+            body: JSON.stringify({ keyword }),
+          }),
         });
 
         if (!response.ok) {

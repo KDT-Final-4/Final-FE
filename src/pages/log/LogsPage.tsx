@@ -397,7 +397,7 @@ export function LogsPage() {
     setIsStreaming(false);
   };
 
-  const startStream = (jobIdInput?: string) => {
+  const startStream = async (jobIdInput?: string) => {
     const jobIdValue = (jobIdInput ?? streamJobId).trim();
     setStreamJobId(jobIdValue);
 
@@ -409,7 +409,8 @@ export function LogsPage() {
     setStreamError(null);
     setStreamLogs([]);
 
-    const url = `/api/pipeline/${encodeURIComponent(jobIdValue)}`;
+    const { getApiUrl } = await import("../../utils/api");
+    const url = getApiUrl(`/api/pipeline/${encodeURIComponent(jobIdValue)}`);
 
     const es = new EventSource(url, { withCredentials: true });
     eventSourceRef.current = es;

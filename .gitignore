@@ -218,6 +218,7 @@ web_modules/
 .env.test.local
 .env.production.local
 .env.local
+.env.production
 
 # parcel-bundler cache (https://parceljs.org/)
 .cache
@@ -230,6 +231,9 @@ out
 # Nuxt.js build / generate output
 .nuxt
 dist
+
+# Vite build output
+build
 
 # Gatsby files
 .cache/
@@ -323,3 +327,4 @@ $RECYCLE.BIN/
 *.lnk
 
 # End of https://www.toptal.com/developers/gitignore/api/node,visualstudiocode,intellij+all,windows,macos,linux
+.vercel

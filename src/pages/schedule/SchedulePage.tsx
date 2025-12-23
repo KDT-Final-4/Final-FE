@@ -40,6 +40,9 @@ const REPEAT_LABELS: Record<string, string> = {
 
 const KST_TIME_ZONE = "Asia/Seoul";
 
+const isRepeatInterval = (value: string): value is (typeof REPEAT_INTERVALS)[number] =>
+  REPEAT_INTERVALS.includes(value as (typeof REPEAT_INTERVALS)[number]);
+
 const getRepeatLabel = (value?: string) => {
   if (!value) return "-";
   return REPEAT_LABELS[value] ?? value;
@@ -201,9 +204,7 @@ export function SchedulePage() {
         throw new Error(`스케줄을 불러오지 못했습니다. (HTTP ${response.status})`);
       }
       const data: ScheduleResponse = await response.json();
-      const normalizedRepeat = REPEAT_INTERVALS.includes(data.repeatInterval as typeof REPEAT_INTERVALS[number])
-        ? data.repeatInterval
-        : REPEAT_INTERVALS[0];
+      const normalizedRepeat = isRepeatInterval(data.repeatInterval) ? data.repeatInterval : REPEAT_INTERVALS[0];
       setSchedule(data);
       setActiveScheduleId(id);
       setIsCreateOpen(false);
@@ -258,7 +259,7 @@ export function SchedulePage() {
           method: "POST",
           body: JSON.stringify({
             title: createForm.title.trim(),
-            startTime: parsedStart.toISOString(),
+            startTime: formattedStartTime,
             repeatInterval: createForm.repeatInterval,
           }),
         }),
@@ -271,9 +272,7 @@ export function SchedulePage() {
       setCreateForm({
         title: "",
         startTime: "",
-          repeatInterval: REPEAT_INTERVALS.includes(data.repeatInterval as typeof REPEAT_INTERVALS[number])
-            ? data.repeatInterval
-            : REPEAT_INTERVALS[0],
+          repeatInterval: isRepeatInterval(data.repeatInterval) ? data.repeatInterval : REPEAT_INTERVALS[0],
       });
       setIsCreateOpen(false);
       await loadScheduleList();
@@ -317,7 +316,7 @@ export function SchedulePage() {
           method: "PUT",
           body: JSON.stringify({
             title: form.title.trim(),
-            startTime: parsedStart.toISOString(),
+            startTime: formattedStartTime,
             repeatInterval: form.repeatInterval,
           }),
         }),
@@ -326,9 +325,7 @@ export function SchedulePage() {
         throw new Error(`스케줄 저장에 실패했습니다. (HTTP ${response.status})`);
       }
       const data: ScheduleResponse = await response.json();
-      const normalizedRepeat = REPEAT_INTERVALS.includes(data.repeatInterval as typeof REPEAT_INTERVALS[number])
-        ? data.repeatInterval
-        : form.repeatInterval;
+      const normalizedRepeat = isRepeatInterval(data.repeatInterval) ? data.repeatInterval : form.repeatInterval;
       setSchedule(data);
       setForm({
         title: data.title ?? form.title.trim(),
@@ -642,7 +639,7 @@ export function SchedulePage() {
                             setForm({
                               title: schedule.title ?? "",
                               startTime: toLocalInputValue(schedule.startTime),
-                              repeatInterval: REPEAT_INTERVALS.includes(schedule.repeatInterval)
+                              repeatInterval: isRepeatInterval(schedule.repeatInterval)
                                 ? schedule.repeatInterval
                                 : REPEAT_INTERVALS[0],
                             });
@@ -662,7 +659,7 @@ export function SchedulePage() {
                             setForm({
                               title: schedule.title ?? "",
                               startTime: toLocalInputValue(schedule.startTime),
-                              repeatInterval: REPEAT_INTERVALS.includes(schedule.repeatInterval)
+                              repeatInterval: isRepeatInterval(schedule.repeatInterval)
                                 ? schedule.repeatInterval
                                 : REPEAT_INTERVALS[0],
                             });

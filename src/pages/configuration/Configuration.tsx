@@ -44,7 +44,7 @@ type UploadChannelSetting = {
   id: number | null;
   userId: number | null;
   name: string;
-  apiKey: string;
+  blogId: string;
   clientId: string;
   clientPw: string;
   status: boolean;
@@ -108,7 +108,7 @@ export function ConfigurationPage() {
     id: null,
     userId: null,
     name: "NAVER",
-    apiKey: "",
+    blogId: "",
     clientId: "",
     clientPw: "",
     status: true,
@@ -117,20 +117,6 @@ export function ConfigurationPage() {
   const [uploadSaving, setUploadSaving] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadSaved, setUploadSaved] = useState(false);
-
-  const [uploadChannelX, setUploadChannelX] = useState<UploadChannelSetting>({
-    id: null,
-    userId: null,
-    name: "X",
-    apiKey: "",
-    clientId: "",
-    clientPw: "",
-    status: true,
-  });
-  const [uploadLoadingX, setUploadLoadingX] = useState(false);
-  const [uploadSavingX, setUploadSavingX] = useState(false);
-  const [uploadErrorX, setUploadErrorX] = useState<string | null>(null);
-  const [uploadSavedX, setUploadSavedX] = useState(false);
 
   useEffect(() => {
     const fetchLlmSetting = async () => {
@@ -221,9 +207,7 @@ export function ConfigurationPage() {
   useEffect(() => {
     const fetchUploadChannels = async () => {
       setUploadLoading(true);
-      setUploadLoadingX(true);
       setUploadError(null);
-      setUploadErrorX(null);
       try {
         const response = await apiFetch("/api/setting/uploadChannel");
         if (!response.ok) throw new Error("업로드 채널 설정을 불러오지 못했습니다.");
@@ -241,38 +225,18 @@ export function ConfigurationPage() {
             id: Number.isFinite(Number(naver.id)) ? Number(naver.id) : prev.id ?? null,
             userId: Number.isFinite(Number(naver.userId)) ? Number(naver.userId) : prev.userId,
             name: typeof naver.name === "string" ? naver.name : prev.name || "NAVER",
-            apiKey: naver.apiKey ?? "",
+            blogId: naver.blogId ?? naver.apiKey ?? "",
             clientId: naver.clientId ?? "",
             clientPw: naver.clientPw ?? "",
             status: "status" in naver ? Boolean((naver as Record<string, unknown>).status) : prev.status,
           }));
         }
 
-        const xChannel =
-          findByName("X") ??
-          channels.find(
-            (item) => typeof item?.name === "string" && item.name.toLowerCase() === "twitter",
-          ) ??
-          channels[1];
-
-        if (xChannel) {
-          setUploadChannelX((prev) => ({
-            id: Number.isFinite(Number(xChannel.id)) ? Number(xChannel.id) : prev.id ?? null,
-            userId: Number.isFinite(Number(xChannel.userId)) ? Number(xChannel.userId) : prev.userId,
-            name: typeof xChannel.name === "string" ? xChannel.name : prev.name || "X",
-            apiKey: xChannel.apiKey ?? "",
-            clientId: xChannel.clientId ?? "",
-            clientPw: xChannel.clientPw ?? "",
-            status: "status" in xChannel ? Boolean((xChannel as Record<string, unknown>).status) : prev.status,
-          }));
-        }
       } catch (error) {
         const message = error instanceof Error ? error.message : "업로드 채널 설정을 불러오지 못했습니다.";
         setUploadError(message);
-        setUploadErrorX(message);
       } finally {
         setUploadLoading(false);
-        setUploadLoadingX(false);
       }
     };
 
@@ -415,7 +379,7 @@ export function ConfigurationPage() {
         body: JSON.stringify({
           userId: uploadChannel.userId,
           name: uploadChannel.name || "NAVER",
-          apiKey: uploadChannel.apiKey,
+          blogId: uploadChannel.blogId,
           clientId: uploadChannel.clientId,
           clientPw: uploadChannel.clientPw,
           status: uploadChannel.status,
@@ -428,7 +392,7 @@ export function ConfigurationPage() {
         id: Number.isFinite(Number(data.id)) ? Number(data.id) : targetId,
         userId: Number.isFinite(Number(data.userId)) ? Number(data.userId) : prev.userId,
         name: data.name ?? prev.name ?? "NAVER",
-        apiKey: data.apiKey ?? prev.apiKey,
+        blogId: data.blogId ?? prev.blogId,
         clientId: data.clientId ?? prev.clientId,
         clientPw: data.clientPw ?? prev.clientPw,
         status: "status" in data ? Boolean(data.status) : prev.status,
@@ -438,48 +402,6 @@ export function ConfigurationPage() {
       setUploadError(error instanceof Error ? error.message : "업로드 채널 설정 저장에 실패했습니다.");
     } finally {
       setUploadSaving(false);
-    }
-  };
-
-  const saveUploadChannelSettingX = async () => {
-    const targetId = uploadChannelX.id;
-    if (!targetId) {
-      setUploadErrorX("X 업로드 채널 ID가 없어 저장할 수 없습니다. 먼저 설정을 불러오세요.");
-      return;
-    }
-    setUploadSavingX(true);
-    setUploadSavedX(false);
-    setUploadErrorX(null);
-    try {
-      const response = await apiFetch(`/api/setting/uploadChannel/${targetId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          userId: uploadChannelX.userId,
-          name: uploadChannelX.name || "X",
-          apiKey: uploadChannelX.apiKey,
-          clientId: uploadChannelX.clientId,
-          clientPw: uploadChannelX.clientPw,
-          status: uploadChannelX.status,
-        }),
-      });
-      if (!response.ok) throw new Error("X 업로드 채널 설정 저장에 실패했습니다.");
-      const data = await response.json();
-      setUploadChannelX((prev) => ({
-        ...prev,
-        id: Number.isFinite(Number(data.id)) ? Number(data.id) : targetId,
-        userId: Number.isFinite(Number(data.userId)) ? Number(data.userId) : prev.userId,
-        name: data.name ?? prev.name ?? "X",
-        apiKey: data.apiKey ?? prev.apiKey,
-        clientId: data.clientId ?? prev.clientId,
-        clientPw: data.clientPw ?? prev.clientPw,
-        status: "status" in data ? Boolean(data.status) : prev.status,
-      }));
-      setUploadSavedX(true);
-    } catch (error) {
-      setUploadErrorX(error instanceof Error ? error.message : "X 업로드 채널 설정 저장에 실패했습니다.");
-    } finally {
-      setUploadSavingX(false);
     }
   };
 
@@ -850,13 +772,12 @@ export function ConfigurationPage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="upload-apiKey">API Key</Label>
+                <Label htmlFor="upload-blogId">Blog ID</Label>
                 <Input
-                  id="upload-apiKey"
-                  type={uploadChannel.apiKey ? "password" : "text"}
-                  value={uploadChannel.apiKey}
-                  onChange={(e) => setUploadChannel((prev) => ({ ...prev, apiKey: e.target.value }))}
-                  placeholder="NAVER API Key를 입력하세요"
+                  id="upload-blogId"
+                  value={uploadChannel.blogId}
+                  onChange={(e) => setUploadChannel((prev) => ({ ...prev, blogId: e.target.value }))}
+                  placeholder="네이버 Blog ID를 입력하세요"
                 />
               </div>
 
@@ -891,64 +812,6 @@ export function ConfigurationPage() {
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>업로드 채널 설정</CardTitle>
-              <CardDescription>X 계정 정보를 입력해 업로드 채널을 설정합니다.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="upload-name-x">채널 이름</Label>
-                <Input
-                  id="upload-name-x"
-                  value={uploadChannelX.name || "X"}
-                  disabled
-                  className="bg-muted text-muted-foreground cursor-not-allowed"
-                  placeholder="X"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="upload-apiKey-x">API Key</Label>
-                <Input
-                  id="upload-apiKey-x"
-                  type={uploadChannelX.apiKey ? "password" : "text"}
-                  value={uploadChannelX.apiKey}
-                  onChange={(e) => setUploadChannelX((prev) => ({ ...prev, apiKey: e.target.value }))}
-                  placeholder="X API Key를 입력하세요"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="upload-clientId-x">X Id</Label>
-                <Input
-                  id="upload-clientId-x"
-                  value={uploadChannelX.clientId}
-                  onChange={(e) => setUploadChannelX((prev) => ({ ...prev, clientId: e.target.value }))}
-                  placeholder="X 아이디를 입력하세요"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="upload-clientPw-x">X Pwd</Label>
-                <Input
-                  id="upload-clientPw-x"
-                  type="password"
-                  value={uploadChannelX.clientPw}
-                  onChange={(e) => setUploadChannelX((prev) => ({ ...prev, clientPw: e.target.value }))}
-                  placeholder="••••••••"
-                />
-              </div>
-
-              {uploadErrorX && <p className="text-sm text-destructive">{uploadErrorX}</p>}
-              {uploadLoadingX && <p className="text-sm text-muted-foreground">X 업로드 채널 설정을 불러오는 중...</p>}
-              {uploadSavedX && !uploadErrorX && <p className="text-sm text-emerald-600">X 업로드 채널 설정이 저장되었습니다.</p>}
-
-              <Button className="w-full" onClick={saveUploadChannelSettingX} disabled={uploadSavingX || uploadLoadingX}>
-                {uploadSavingX ? "저장 중..." : "X 설정 저장"}
-              </Button>
-            </CardContent>
-          </Card>
         </TabsContent>
       </Tabs>
 
